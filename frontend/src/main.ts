@@ -2,6 +2,7 @@
 // All game rules live on the server; this file only keeps UI state (e.g. targeting).
 
 import "./style.css";
+import { clearPluginSprites, registerSprites } from "./atlas";
 import { GameConnection, serverUrl, type ConnectionStatus } from "./connection";
 import { Effects } from "./effects";
 import { ForgePanel } from "./forge";
@@ -27,6 +28,7 @@ const runInfo = $<HTMLElement>("#run-info");
 const stats = $<HTMLElement>("#stats");
 const spells = $<HTMLElement>("#spells");
 const targetingHint = $<HTMLElement>("#targeting-hint");
+const banner = $<HTMLElement>("#banner");
 
 const renderer = new Renderer(canvas);
 const effects = new Effects();
@@ -90,8 +92,18 @@ function handleMessage(message: ServerMessage): void {
   if (startingNewGame) {
     log.clear();
     renderer.reset();
+    clearPluginSprites();
     newSpellIds.clear();
     startingNewGame = false;
+  }
+  registerSprites(message.sprites);
+  for (const event of message.events) {
+    if (event.type === "level_started") {
+      renderer.reset();
+      showBanner(`Depth ${event.depth}`);
+    } else if (event.type === "level_cleared") {
+      showBanner("Stairs down opened");
+    }
   }
   state = message.state;
   effects.addEvents(message.events, performance.now());
@@ -117,6 +129,7 @@ function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
     case "done":
       forge.done(message);
       newSpellIds.add(message.spell.id);
+      registerSprites(message.sprites);
       log.add([`✦ ${message.message}`], "system");
       if (state && !startingNewGame) {
         state = message.state;
@@ -124,6 +137,13 @@ function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
       }
       break;
   }
+}
+
+function showBanner(text: string): void {
+  banner.textContent = text;
+  banner.classList.remove("show");
+  void banner.offsetWidth; // restart the CSS animation
+  banner.classList.add("show");
 }
 
 function showConnection(status: ConnectionStatus): void {
@@ -309,13 +329,10 @@ function refresh(): void {
     : "";
 
   overlay.hidden = state.status === "playing";
-  if (state.status !== "playing") {
-    $<HTMLElement>("#overlay-title").textContent =
-      state.status === "won" ? "Victory" : "You died";
+  if (state.status === "lost") {
+    $<HTMLElement>("#overlay-title").textContent = "You died";
     $<HTMLElement>("#overlay-text").textContent =
-      state.status === "won"
-        ? `Every monster is dead after ${state.turn} turns.`
-        : `The dungeon claimed you on turn ${state.turn}.`;
+      `The dungeon claimed you on depth ${state.depth}, after ${state.turn} turns.`;
   }
   requestDraw();
 }

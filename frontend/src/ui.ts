@@ -39,7 +39,7 @@ export function renderStats(container: HTMLElement, state: GameState): void {
   container.replaceChildren(
     meter("Health", hp, me?.max_hp ?? 20, "hp"),
     meter("Mana", me?.mana ?? 0, me?.max_mana ?? 10, "mana"),
-    el("p", "muted", `Turn ${state.turn}${statuses ? ` · ${statuses}` : ""}`),
+    el("p", "muted", `Depth ${state.depth} · Turn ${state.turn}${statuses ? ` · ${statuses}` : ""}`),
   );
 }
 

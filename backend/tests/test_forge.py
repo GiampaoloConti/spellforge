@@ -53,7 +53,9 @@ class ScriptedWriter:
         self.results = list(results)
         self.calls: list[list[Attempt]] = []
 
-    async def write(self, request: SpellRequest, previous: list[Attempt]) -> SpellDraft:
+    async def write(
+        self, request: SpellRequest, previous: list[Attempt], on_progress=None
+    ) -> SpellDraft:
         self.calls.append(list(previous))
         result = self.results.pop(0)
         if isinstance(result, Exception):
@@ -155,3 +157,42 @@ def test_double_escaped_characters_in_notes_are_decoded():
 
     assert _unescape("then 2 \u2014 up to 3") == "then 2 — up to 3"
     assert _unescape("plain text") == "plain text"
+
+
+@pytest.mark.parametrize(
+    ("idea", "expected"),
+    [
+        ("turn enemies into rocks", True),
+        ("a spell that turns the nearest goblin into a harmless frog for 3 turns", True),
+        ("polymorph a monster", True),
+        ("petrify everything around me", True),
+        ("a fireball that explodes", False),
+        ("turn undead", False),
+        ("heal me and turn my mana into health", True),
+    ],
+)
+def test_transformation_ideas_are_detected(idea, expected):
+    from spellforge.agents.forge import changes_appearance
+
+    assert changes_appearance(idea) is expected
+
+
+def test_transformation_without_a_sprite_is_sent_back():
+    writer = ScriptedWriter(GOOD, GOOD)
+    request = SpellRequest(
+        idea="turn enemies into rocks", taken_ids=REQUEST.taken_ids, known_spells=[]
+    )
+    outcome = asyncio.run(forge_spell(request, writer, plugin_id="forged_1", max_attempts=2))
+    assert not outcome.ok
+    assert any("defines no sprite" in p for p in outcome.attempts[0].problems)
+
+
+def test_request_options_match_each_model():
+    from spellforge.agents.spell_writer import request_options
+
+    opus = request_options("claude-opus-5", "low")
+    assert opus["fallbacks"] == "default" and opus["output_config"]["effort"] == "low"
+    sonnet = request_options("claude-sonnet-5", "medium")
+    assert "fallbacks" not in sonnet and sonnet["thinking"] == {"type": "adaptive"}
+    haiku = request_options("claude-haiku-4-5", "low")
+    assert set(haiku) == {"output_config"} and "effort" not in haiku["output_config"]

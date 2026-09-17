@@ -8,6 +8,7 @@ describe("pixel art", () => {
     ...TILES.floor.map((art, i): [string, PixelArt] => [`floor ${i}`, art]),
     ["wall_face", TILES.wall_face],
     ["wall_top", TILES.wall_top],
+    ["stairs", TILES.stairs],
   ];
 
   it.each(all)("%s is a valid 16x16 grid with a complete palette", (_name, art) => {

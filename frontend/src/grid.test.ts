@@ -23,6 +23,8 @@ function entity(id: number, pos: [number, number], faction: "player" | "enemy"):
     mana: 0,
     max_mana: 0,
     attack: 1,
+    appearance: null,
+    can_act: true,
     statuses: [],
   };
 }
@@ -31,6 +33,7 @@ function game(map: string[], entities: EntityState[]): GameState {
   return {
     seed: 0,
     player_id: 1,
+    depth: 1,
     turn: 1,
     status: "playing",
     map,
@@ -116,6 +119,7 @@ describe("drawing helpers", () => {
     expect(tileKind(state, 2, 1)).toBe("wall_face"); // floor directly below
     expect(tileKind(state, 1, 3)).toBe("wall_top"); // diagonal to the floor
     expect(tileKind(state, 0, 0)).toBe("void"); // solid rock
+    expect(tileKind(game(["#>#"], []), 1, 0)).toBe("stairs");
   });
 
   it("keeps the camera centred but inside the map", () => {

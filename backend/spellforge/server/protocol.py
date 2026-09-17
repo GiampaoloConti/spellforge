@@ -68,13 +68,19 @@ MAX_MESSAGE_BYTES = 4096
 # ---- server -> client --------------------------------------------------------
 
 
-def state_message(game: Game, events: list[Event], log: list[str]) -> dict[str, Any]:
-    """The full game state after something happened, plus what happened."""
+def state_message(
+    game: Game, events: list[Event], log: list[str], sprites: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The full game state after something happened, plus what happened.
+
+    `sprites` holds pixel art the client has not received yet (sprite id -> palette/rows).
+    """
     return {
         "type": "state",
         "state": game.snapshot(),
         "events": [event.to_dict() for event in events],
         "log": log,
+        "sprites": sprites or {},
     }
 
 

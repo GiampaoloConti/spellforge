@@ -1,6 +1,6 @@
 // Pixel art for creatures and tiles, as 16x16 grids of palette characters.
-// "." is transparent. Each sprite carries its own palette, so new art (eventually
-// written by the agents for generated monsters) is self-contained plain data.
+// "." is transparent. Only the player and the tiles live here: monster sprites (and art
+// for forged spells) are defined by plugins on the server and arrive with the game state.
 // Draft previews were made with a small painter script; edit the grids directly.
 
 import type { PixelArt } from "./pixelart";
@@ -43,39 +43,6 @@ export const CREATURES: Record<string, PixelArt> = {
       "..kdddkkdddkknk.",
     ],
   },
-  goblin: {
-    palette: {
-      "k": "#140d1c", // outline
-      "n": "#8b5a2b", // wood
-      "g": "#5caa3c", // skin
-      "G": "#3c7a2a", // skin shade
-      "L": "#94d65c", // skin light
-      "r": "#ff4b3e", // eyes
-      "t": "#f4efe0", // teeth
-      "h": "#7a4a2a", // tunic
-      "H": "#a06638", // tunic light
-      "i": "#c9d4de", // blade
-      "I": "#ffffff", // blade glint
-    },
-    rows: [
-      "................",
-      "................",
-      ".k...kkkkkk...k.",
-      "kLk.kLLLLLGk.kgk",
-      "kgkkLggggggGkkgk",
-      ".kggLGGGGGGGGGk.",
-      "..kkgkrggrkGkkIk",
-      "...kgggggggGkkik",
-      "...kggtkktgGkkik",
-      "...kkgggggGkkkik",
-      "..kgHhhhhhhhgkik",
-      "..kgHhhhhhhhGnnk",
-      "...kkkkkkkkkkkk.",
-      "...kHhhhhhhhk...",
-      "....kGGkkGGk....",
-      "....kkk..kkk....",
-    ],
-  },
 };
 
 function tile(rows: string[]): PixelArt {
@@ -94,6 +61,11 @@ const TILE_PALETTE: Record<string, string> = {
   "8": "#2c2540", // wall top
   "9": "#3d3456", // wall top light
   "a": "#231d33", // wall top shade
+  "b": "#0b0910", // stairwell dark
+  "c": "#6a5f8a", // step light
+  "d": "#4a4065", // step
+  "e": "#2e2740", // step shade
+  "f": "#3a3250", // step mid
 };
 
 export const TILES = {
@@ -188,5 +160,23 @@ export const TILES = {
     "88888888aa88a888",
     "88a9888888888888",
     "88a8888888888988",
+  ]),
+  stairs: tile([
+    "1111111111111111",
+    "1000000000000002",
+    "10eeeeeeeeeeee02",
+    "10eccccccccccc02",
+    "10eddddddddddd02",
+    "10ebbbbbbbbbbb02",
+    "10ebbddddddddd02",
+    "10ebbfffffffff02",
+    "10ebbbbbbbbbbb02",
+    "10ebbbbfffffff02",
+    "10ebbbbeeeeeee02",
+    "10ebbbbbbbbbbb02",
+    "10ebbbbbbeeeee02",
+    "10ebbbbbbbbbbb02",
+    "1000000000000002",
+    "1222222222222222",
   ]),
 };

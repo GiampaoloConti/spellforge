@@ -27,7 +27,15 @@ export interface EntityState {
   mana: number;
   max_mana: number;
   attack: number;
+  appearance: string | null; // sprite id to draw it with; null = default art for its kind
+  can_act: boolean; // false while stunned, frozen, petrified...
   statuses: StatusState[];
+}
+
+// 16x16 pixel art sent by the server for plugin-defined sprites (see pixelart.ts).
+export interface SpriteArt {
+  palette: Record<string, string>;
+  rows: string[];
 }
 
 export type SpellTarget = "self" | "tile" | "entity";
@@ -47,8 +55,9 @@ export interface SpellState {
 export interface GameState {
   seed: number;
   player_id: number;
+  depth: number; // dungeon level, starting at 1
   turn: number;
-  status: "playing" | "won" | "lost";
+  status: "playing" | "lost";
   map: string[]; // rows of "#" (wall) and "." (floor)
   entities: EntityState[];
   spells: SpellState[];
@@ -79,10 +88,17 @@ export interface ForgeDone {
   input_tokens: number;
   output_tokens: number;
   state: GameState;
+  sprites: Record<string, SpriteArt>; // art the spell introduced, if any
 }
 
 export type ServerMessage =
-  | { type: "state"; state: GameState; events: GameEvent[]; log: string[] }
+  | {
+      type: "state";
+      state: GameState;
+      events: GameEvent[];
+      log: string[];
+      sprites: Record<string, SpriteArt>; // only sprites not sent before
+    }
   | { type: "error"; message: string }
   | { type: "welcome"; forge_available: boolean; forge_status: string }
   // The forge messages all have type "forge"; `status` tells them apart.

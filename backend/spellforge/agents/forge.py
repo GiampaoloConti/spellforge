@@ -11,6 +11,7 @@ keeps playing. In M4 the single writer is replaced by a team of agents.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -25,6 +26,22 @@ from spellforge.agents.spell_writer import (
 from spellforge.agents.verify import Verification, verify_spell_source
 
 DEFAULT_MAX_ATTEMPTS = 2
+
+TRANSFORMATION = re.compile(
+    r"\b(turns?|turning|transform\w*|morph\w*|chang\w*|becom\w*)\b[^.!?]{0,60}\binto\b"
+    r"|\bpolymorph|\bpetrif|\bdisguise",
+    re.IGNORECASE,
+)
+MISSING_SPRITE = (
+    "the idea changes how creatures look, but the plugin defines no sprite: draw one with "
+    "define_sprite and use it via define_status(appearance=...) or define_monster(sprite=...)"
+)
+
+
+def changes_appearance(idea: str) -> bool:
+    """Heuristic: does the player's idea transform creatures into something else?"""
+    return TRANSFORMATION.search(idea) is not None
+
 
 ProgressCallback = Callable[[str, str], Awaitable[None]]
 
@@ -69,8 +86,12 @@ async def forge_spell(
             if attempt_number == 1
             else f"Fixing the spell (attempt {attempt_number} of {max_attempts})…",
         )
+
+        async def note(message: str) -> None:
+            await progress("writing", message)
+
         try:
-            draft = await writer.write(request, outcome.attempts)
+            draft = await writer.write(request, outcome.attempts, note)
         except SpellWriterError as exc:
             outcome.error = str(exc)
             break
@@ -79,6 +100,9 @@ async def forge_spell(
         verification = await asyncio.to_thread(
             verify_spell_source, plugin_id, draft.source, request.taken_ids
         )
+        if verification.ok and changes_appearance(request.idea) and not verification.sprite_count:
+            verification.ok = False
+            verification.problems.append(MISSING_SPRITE)
         if verification.ok:
             outcome.ok = True
             outcome.draft = draft

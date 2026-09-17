@@ -38,6 +38,7 @@ class Verification:
     problems: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     spell_name: str = ""
+    sprite_count: int = 0
 
 
 def verify_spell_source(
@@ -55,7 +56,7 @@ def verify_spell_source(
         if problems:
             return Verification(ok=False, problems=problems)
         spell = plugin.spells[0]
-        result = Verification(ok=True, spell_name=spell.name)
+        result = Verification(ok=True, spell_name=spell.name, sprite_count=len(plugin.sprites))
         try:
             for scenario, target in _scenarios(plugin):
                 _run_scenario(plugin, scenario, target, result)
@@ -73,7 +74,12 @@ def _rule_problems(plugin: Plugin, taken_ids: dict[str, list[str]]) -> list[str]
         problems.append(
             f"the plugin must define exactly one spell, it defines {len(plugin.spells)}"
         )
-    kinds = {"spells": plugin.spells, "statuses": plugin.statuses, "monsters": plugin.monsters}
+    kinds = {
+        "spells": plugin.spells,
+        "statuses": plugin.statuses,
+        "monsters": plugin.monsters,
+        "sprites": plugin.sprites,
+    }
     for kind, defs in kinds.items():
         clashes = sorted({d.id for d in defs} & set(taken_ids.get(kind, [])))
         if clashes:

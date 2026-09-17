@@ -31,7 +31,7 @@ from spellforge.engine import (
     Wait,
 )
 from spellforge.narration import Narrator
-from spellforge.plugins import default_registry
+from spellforge.plugins import builtin_encounters, default_registry
 from spellforge.sandbox.host import PluginSandbox
 from spellforge.server.protocol import (
     MAX_MESSAGE_BYTES,
@@ -91,6 +91,7 @@ class GameSession:
         self._sandboxes: list[PluginSandbox] = []
         self._forge_task: asyncio.Task[None] | None = None
         self._forges_started = 0
+        self._sent_sprites: set[str] = set()
 
     async def start(self) -> None:
         status = "ready" if self._writer is not None else FORGE_OFFLINE
@@ -126,10 +127,16 @@ class GameSession:
             await self._send(forge_message("failed", "The forge was stopped: a new run began."))
         self._close_sandboxes()
         seed = seed if seed is not None else self._rng.randrange(1_000_000)
-        self.game = Game.new(seed, self._registry_factory(), spells=STARTING_SPELLS)
+        self.game = Game.new(
+            seed, self._registry_factory(), spells=STARTING_SPELLS, encounters=builtin_encounters
+        )
         self._narrator = Narrator(self.game)
-        log = [f"You enter the dungeon (seed {seed}). Defeat every monster to win."]
-        await self._send(state_message(self.game, [], log))
+        self._sent_sprites.clear()
+        log = [
+            f"You enter the dungeon (seed {seed}). Clear each level to open the stairs down, "
+            "and see how deep you can go."
+        ]
+        await self._send(state_message(self.game, [], log, self._unsent_sprites(self.game)))
 
     async def _act(self, action: Action) -> None:
         if self.game is None or self._narrator is None:
@@ -140,7 +147,16 @@ class GameSession:
         except InvalidAction as exc:
             await self._send(error_message(str(exc)))
             return
-        await self._send(state_message(self.game, events, self._narrator.narrate(events)))
+        await self._send(
+            state_message(
+                self.game, events, self._narrator.narrate(events), self._unsent_sprites(self.game)
+            )
+        )
+
+    def _unsent_sprites(self, game: Game) -> dict[str, Any]:
+        new_ids = set(game.registry.sprites) - self._sent_sprites
+        self._sent_sprites |= new_ids
+        return game.sprite_art(new_ids) if new_ids else {}
 
     # ---- forge -----------------------------------------------------------------
 
@@ -171,6 +187,7 @@ class GameSession:
                 "spells": sorted(registry.spells),
                 "statuses": sorted(registry.statuses),
                 "monsters": sorted(registry.monsters),
+                "sprites": sorted(registry.sprites),
             },
             known_spells=[
                 f"{s.name} ({s.mana_cost} mana): {s.description}"
@@ -234,6 +251,7 @@ class GameSession:
                     input_tokens=outcome.input_tokens,
                     output_tokens=outcome.output_tokens,
                     state=snapshot,
+                    sprites=self._unsent_sprites(game),
                 )
             )
         except asyncio.CancelledError:

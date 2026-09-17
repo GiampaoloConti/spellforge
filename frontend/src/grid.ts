@@ -73,13 +73,14 @@ export function validTargets(state: GameState, spell: SpellState): EntityState[]
     .sort((a, b) => distance(me.pos, a.pos) - distance(me.pos, b.pos) || a.id - b.id);
 }
 
-export type TileKind = "floor" | "wall_face" | "wall_top" | "void";
+export type TileKind = "floor" | "stairs" | "wall_face" | "wall_top" | "void";
 
 /**
  * How to draw a map cell: walls with floor directly below show their brick face,
  * other walls next to floor show their top, and solid rock is left dark.
  */
 export function tileKind(state: GameState, x: number, y: number): TileKind {
+  if (state.map[y]?.[x] === ">") return "stairs";
   if (!isWall(state, [x, y])) return "floor";
   if (y + 1 < state.map.length && !isWall(state, [x, y + 1])) return "wall_face";
   for (let dy = -1; dy <= 1; dy++) {

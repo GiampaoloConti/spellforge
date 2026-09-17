@@ -546,3 +546,41 @@ kbd {
   color: #1a1426;
   background: #ffd76a;
 }
+
+/* ---- level banner ---- */
+
+.banner {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 26px;
+  border-radius: 999px;
+  background: rgba(11, 9, 16, 0.82);
+  border: 1px solid rgba(180, 140, 255, 0.5);
+  color: #ffd76a;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.banner.show {
+  animation: banner 2.2s ease-out forwards;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  12%,
+  70% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}

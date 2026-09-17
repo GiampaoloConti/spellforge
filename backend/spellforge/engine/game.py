@@ -721,6 +721,7 @@ class Game:
                     "max_mana": e.max_mana,
                     "attack": e.attack,
                     "appearance": self.appearance(e),
+                    "can_act": self.can_act(e),
                     "statuses": [
                         {"id": s.status_id, "remaining": s.remaining} for s in e.statuses.values()
                     ],

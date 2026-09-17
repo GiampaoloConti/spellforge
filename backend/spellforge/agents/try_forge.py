@@ -26,6 +26,7 @@ async def main(idea: str, attempts: int) -> None:
             "spells": sorted(registry.spells),
             "statuses": sorted(registry.statuses),
             "monsters": sorted(registry.monsters),
+            "sprites": sorted(registry.sprites),
         },
         known_spells=[f"{s.name} ({s.mana_cost} mana)" for s in registry.spells.values()],
     )

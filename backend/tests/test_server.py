@@ -56,6 +56,11 @@ def test_new_game_returns_full_state():
         player = next(e for e in state["entities"] if e["id"] == state["player_id"])
         assert player["kind"] == "player"
         assert "seed 42" in reply["log"][0]
+        assert state["depth"] == 1
+        # Plugin sprite art is sent once, then only when new sprites appear.
+        assert {"goblin", "orc", "slime"} <= set(reply["sprites"])
+        assert len(reply["sprites"]["goblin"]["rows"]) == 16
+        assert (await client.send(WAIT))["sprites"] == {}
         json.dumps(reply)
 
     run(scenario())
@@ -163,6 +168,7 @@ def test_forged_spell_is_hot_loaded_and_castable():
     assert done["spell"]["name"] == "Spark" and "def on_cast" in done["source"]
     assert "spark" in [s["id"] for s in done["state"]["spells"]]
     assert done["attempts"] == 1 and done["notes"] == "Zap!"
+    assert done["sprites"] == {}  # the spark spell defines no art
     # Casting at a wall tile is rejected by the engine, proving the spell is really registered.
     assert cast == {"type": "error", "message": "invalid target tile"}
 
@@ -185,7 +191,9 @@ class GatedWriter:
     def __init__(self) -> None:
         self.release = asyncio.Event()
 
-    async def write(self, request: SpellRequest, previous: list[Attempt]) -> SpellDraft:
+    async def write(
+        self, request: SpellRequest, previous: list[Attempt], on_progress=None
+    ) -> SpellDraft:
         await self.release.wait()
         return SpellDraft(spell_id="spark", notes="", source=GOOD)
 

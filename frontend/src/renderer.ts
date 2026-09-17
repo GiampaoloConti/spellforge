@@ -1,7 +1,7 @@
 // Draws the game state onto a <canvas> with pixel-art sprites and a camera that follows
 // the player. Knows nothing about the network or input.
 
-import { creatureSprite, floorSprite, wallSprite } from "./atlas";
+import { creatureSprite, floorSprite, tileSprite } from "./atlas";
 import { FLASH_MS, FLOAT_MS, type Effects } from "./effects";
 import {
   cameraOrigin,
@@ -130,7 +130,7 @@ export class Renderer {
       for (let x = x0; x < Math.min(state.map[y]!.length, x0 + this.view.cols + 1); x++) {
         const kind = tileKind(state, x, y);
         if (kind === "void") continue;
-        const sprite = kind === "floor" ? floorSprite(tileHash(x, y)) : wallSprite(kind);
+        const sprite = kind === "floor" ? floorSprite(tileHash(x, y)) : tileSprite(kind);
         ctx.drawImage(sprite, x * tile, y * tile, tile, tile);
       }
     }
@@ -219,9 +219,9 @@ export class Renderer {
 
     // Idle bob: every other beat, shifted by id so creatures don't move in lockstep.
     const beat = Math.floor(now / BOB_MS) + entity.id;
-    const bob = !frozen && beat % 2 === 1 ? -scale : 0;
+    const bob = entity.can_act && beat % 2 === 1 ? -scale : 0;
 
-    const sprite = creatureSprite(entity.kind, frozen);
+    const sprite = creatureSprite(entity.appearance ?? entity.kind, frozen);
     if (sprite) {
       const flip = this.facing.get(entity.id) === -1;
       ctx.save();
