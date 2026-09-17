@@ -60,7 +60,7 @@ Key decisions and why:
 backend/
   spellforge/
     engine/      # grid, entities, turn loop, events, seeded RNG, plugin API
-    plugins/     # hand-written builtin plugins (reference examples for the Coder agent)
+    plugins/     # hand-written builtin plugins: plugin source loaded via load_plugin, not imported
     sandbox/     # AST validator + subprocess runner with limits
     agents/      # orchestrator + one module per agent role, prompts, schemas
     server/      # FastAPI + websocket
@@ -71,7 +71,7 @@ docs/            # design notes, eval results
 
 ## Milestones
 
-- [ ] **M1: Engine (no AI).** Playable grid roguelike in the terminal/headless tests: player, walls, a hand-written enemy, turn loop, a plugin API with one hand-written spell plugin, deterministic tests. *Design the plugin API carefully, since everything else depends on it.*
+- [x] **M1: Engine (no AI).** Playable grid roguelike in the terminal/headless tests: player, walls, a hand-written enemy, turn loop, a plugin API with one hand-written spell plugin, deterministic tests. *Design the plugin API carefully, since everything else depends on it.*
 - [ ] **M2: Web client.** FastAPI websocket server plus a minimal TS canvas renderer. Playable in the browser.
 - [ ] **M3: One agent.** Invent box → a single LLM call writes a plugin → sandbox validation → hot-load → castable.
 - [ ] **M4: Agent team.** Designer → Balancer → Coder → Tester with the retry loop and sandbox simulation. A Dungeon Master generates counter-enemies.
@@ -79,7 +79,8 @@ docs/            # design notes, eval results
 
 ## Current status
 
-- 2026-09-17: repo scaffolded (README, CLAUDE.md, pyproject, package skeleton). **Next: start M1**, beginning with the plugin API design in `backend/spellforge/engine/`.
+- 2026-09-17: repo scaffolded (README, CLAUDE.md, pyproject, package skeleton).
+- 2026-09-17: **M1 done.** Engine in `backend/spellforge/engine/`: `api.py` (plugin contract: `Ctx`, views, hooks), `plugins.py` (loader + `Registry`), `game.py` (turn loop, combat, statuses, hook dispatch with disable-on-failure, action budget, hook depth limit), `context.py` (validating `Ctx` impl). Builtin plugins (`goblin`, `firebolt`, `frost_nova`) are plugin *source* loaded like generated code. Terminal client: `python -m spellforge`. 79 tests. Design notes: `docs/plugin-api.md`. **Next: M2**: FastAPI websocket server (send `Game.snapshot()` + events, receive actions) and a minimal TS canvas renderer.
 
 Keep this section up to date: when finishing a chunk of work, tick milestones and add a dated line saying what was done and what comes next.
 
@@ -95,7 +96,7 @@ Keep this section up to date: when finishing a chunk of work, tick milestones an
 ## Commands
 
 ```bash
-# from backend/
+# from backend/  (python -m spellforge to play in the terminal)
 python -m venv .venv && .venv/Scripts/activate   # Windows (Git Bash)
 pip install -e ".[dev]"
 pytest

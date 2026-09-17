@@ -22,13 +22,27 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
 - **Nothing crashes the game.** Plugins that fail are disabled and replaced with safe fallbacks.
 - **Measured, not claimed.** An eval suite compares a single agent against the agent team on success rate, game balance, cost and latency.
 
+## Try it
+
+The engine (milestone 1) is playable in the terminal:
+
+```bash
+cd backend
+python -m venv .venv && .venv/Scripts/activate   # Windows (Git Bash); use bin/activate elsewhere
+pip install -e ".[dev]"
+python -m spellforge --seed 42
+pytest
+```
+
+The plugin API that agents will write against is documented in [docs/plugin-api.md](docs/plugin-api.md).
+
 ## Stack
 
 Python (engine, agents, sandbox, FastAPI websocket server) · TypeScript (canvas renderer) · Claude (Anthropic API)
 
 ## Roadmap
 
-- [ ] M1: Deterministic grid engine plus plugin API
+- [x] M1: Deterministic grid engine plus plugin API
 - [ ] M2: Browser client
 - [ ] M3: Single agent writes plugins at runtime
 - [ ] M4: Agent team (designer, balancer, coder, tester) plus a Dungeon Master that counters your play style
