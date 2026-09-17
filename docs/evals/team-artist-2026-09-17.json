@@ -1,0 +1,460 @@
+{
+ "ideas": [
+  "turn enemies into rocks for a few turns",
+  "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+  "summon a spirit wolf that fights beside me for 5 turns"
+ ],
+ "configs": [
+  [
+   "team-artist",
+   "-"
+  ]
+ ],
+ "repeats": 2,
+ "summary": "| Model | Effort | Success | Avg attempts | Avg time | Avg cost | Sprites drawn when needed |\n|---|---|---|---|---|---|---|\n| team-artist | - | 6/6 | 1.0 | 25.1s | $0.057 | 4/4 |",
+ "runs": [
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 16.9,
+    "input_tokens": 17424,
+    "cache_read_tokens": 12302,
+    "output_tokens": 2057,
+    "cost_usd": 0.0351,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify implemented as a prevents_action status with appearance override; apply_status naturally keeps the longer remaining duration on reapply.",
+    "source": "DURATION = 3\n\n\ndef on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The petrifying gaze finds no target.\")\n        return\n    if victim.faction == ctx.entity(caster).faction:\n        return\n    applied = ctx.apply_status(victim.id, \"petrified\", DURATION, source=caster)\n    if applied:\n        ctx.log(f\"The {victim.name} turns to stone!\")\n\n\ndef on_apply(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} is now an inert rock.\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to stone: cannot act or move.\",\n    prevents_action=True,\n    on_apply=on_apply,\n    appearance=\"bench_0_art\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn an enemy to stone, immobilizing it and preventing it from acting for 3 turns.\",\n    mana_cost=6,\n    cooldown=5,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n\n\n# ---- art (drawn by the Artist) ----\n\ndefine_sprite(\n    id='bench_0_art',\n    palette={\n        'k': '#140d1c',\n        'l': '#a8aeb8',\n        'g': '#7e8590',\n        'd': '#565c67',\n        'c': '#3a3f49',\n    },\n    rows=[\n        '................',\n        '................',\n        '.....kkkkkk.....',\n        '....klllggkk....',\n        '...klllgggdgk...',\n        '..kllgggkgggdk..',\n        '.kllgggkcggggdk.',\n        '.klgggkcggggddk.',\n        'klggggkcgggdddk.',\n        'klgggggkcgdddgk.',\n        'klgggcgggkddddgk',\n        'kdggggcgggkdddgk',\n        'kdgggggcggggdddk',\n        '.kdddgggggddddk.',\n        '..kkdddddddkkk..',\n        '....kkkkkkk.....',\n    ],\n)\n",
+    "team": {
+     "design": {
+      "name": "Petrify",
+      "description": "Turn an enemy to stone, immobilizing it and preventing it from acting for 3 turns.",
+      "mana_cost": 6,
+      "cooldown": 5,
+      "effects": [
+       "Target is polymorphed into an inert rock, unable to act or move, for 3 turns."
+      ],
+      "needs_sprite": true
+     },
+     "review": {
+      "verdict": "approve",
+      "rationale": "3-turn single-target stun with a 5-turn cooldown is within the control budget and can't be chained to permanently lock a target, so this is fine as written.",
+      "changes": [],
+      "exploits_considered": [
+       "Refresh-stacking to permanently stun a target (blocked by cooldown \u2265 duration)",
+       "Combining with Firebolt/Frost Nova for guaranteed damage window (acceptable, matches Frost Nova's control role)",
+       "No self/ally splash since single-target"
+      ]
+     },
+     "speculation": "used",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 7.9,
+       "tokens": 2569,
+       "cost_usd": 0.0097
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 8.3,
+       "tokens": 4271,
+       "cost_usd": 0.0092
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 6.2,
+       "tokens": 10741,
+       "cost_usd": 0.0094
+      },
+      "artist": {
+       "model": "claude-opus-5",
+       "seconds": 6.6,
+       "tokens": 1900,
+       "cost_usd": 0.017
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 35.5,
+    "input_tokens": 22371,
+    "cache_read_tokens": 15254,
+    "output_tokens": 3526,
+    "cost_usd": 0.0543,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify applies a prevents_action status with duration 3, refreshing on reapply (engine handles refresh via apply_status keeping longer duration). Range/LOS/mana are handled by the engine before on_cast runs.",
+    "source": "def on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The petrifying magic finds nothing to grip.\")\n        return\n    ctx.apply_status(victim.id, \"petrified\", 3, source=caster)\n\n\ndef on_apply(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} turns to stone!\")\n\n\ndef on_expire(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} crumbles free of the stone!\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to stone: cannot move or act.\",\n    prevents_action=True,\n    on_apply=on_apply,\n    on_expire=on_expire,\n    appearance=\"bench_1_art\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn an enemy to stone, immobilizing it and preventing all actions for 3 turns.\",\n    mana_cost=5,\n    cooldown=5,\n    target=\"entity\",\n    range=5,\n    on_cast=on_cast,\n)\n\n\n# ---- art (drawn by the Artist) ----\n\ndefine_sprite(\n    id='bench_1_art',\n    palette={\n        'k': '#140d1c',\n        'l': '#9aa2ad',\n        'g': '#6e7681',\n        'd': '#4a505a',\n        'c': '#2e333b',\n        'v': '#7fe0c0',\n    },\n    rows=[\n        '................',\n        '......kkkkk.....',\n        '....kkllllgkk...',\n        '...kllllllgggk..',\n        '..kllllcgggggk..',\n        '..klllkcggvggkk.',\n        '.kllllgckggggdk.',\n        '.kllglggkcgggdk.',\n        'kllggggggcvgddk.',\n        'klggggggkcgdddk.',\n        'kdggggcgggddddk.',\n        'kdggdgkcvgdddck.',\n        'kddddggcgddccck.',\n        'kddcdddgdccccck.',\n        '.kkddcdddccckk..',\n        '...kkkkkkkkk....',\n    ],\n)\n",
+    "team": {
+     "design": {
+      "name": "Petrify",
+      "description": "Turn an enemy to stone, immobilizing it and preventing all actions for 3 turns. The petrified creature takes 50% more damage from all sources while stoned.",
+      "mana_cost": 5,
+      "cooldown": 5,
+      "effects": [
+       "Target is polymorphed into a stationary rock, unable to move or act, and takes increased damage until the status expires."
+      ],
+      "needs_sprite": true
+     },
+     "review": {
+      "verdict": "adjust",
+      "rationale": "A 3-turn full stun is fine at this cooldown, but the extra 50% damage amplification is an uncapped percentage effect that breaks the damage budget when combined with Firebolt or melee hits.",
+      "changes": [
+       {
+        "field": "description",
+        "before": "...takes 50% more damage from all sources while stoned.",
+        "after": "Removed the 50% damage clause.",
+        "reason": "Percentage damage bonus bypasses damage budget."
+       },
+       {
+        "field": "effects[0].summary",
+        "before": "...and takes increased damage until status expires.",
+        "after": "...unable to move or act until status expires.",
+        "reason": "Consistency with removed damage bonus."
+       },
+       {
+        "field": "edge_cases",
+        "before": "...interaction with damage amplification multiply damage.",
+        "after": "Petrify interacts normally with shield/thorns statuses.",
+        "reason": "No longer relevant without damage amplification."
+       }
+      ],
+      "exploits_considered": [
+       "Stacking Firebolt/melee damage with a 50% multiplier to far exceed normal damage caps",
+       "Percentage-based damage amplification bypassing the flat damage budget entirely",
+       "Refreshing petrify before it expires for permanent lockdown (mitigated by refresh-not-stack rule already present)"
+      ]
+     },
+     "speculation": "discarded",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 8.3,
+       "tokens": 2583,
+       "cost_usd": 0.0098
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 20.0,
+       "tokens": 10586,
+       "cost_usd": 0.0274
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 6.6,
+       "tokens": 10784,
+       "cost_usd": 0.01
+      },
+      "artist": {
+       "model": "claude-opus-5",
+       "seconds": 7.8,
+       "tokens": 1944,
+       "cost_usd": 0.0179
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 20.2,
+    "input_tokens": 17744,
+    "cache_read_tokens": 9350,
+    "output_tokens": 2744,
+    "cost_usd": 0.0494,
+    "spell": "Chain Lightning",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain lightning: initial target is the passed entity target; then arcs to nearest un-struck enemy within radius 3 of the previous target's last known position, up to 2 more times. No mana-refund API exists so we just log if no valid initial target.",
+    "source": "DAMAGES = [6, 4, 2]\nARC_RADIUS = 3\n\n\ndef on_cast(ctx, caster, target):\n    first = ctx.entity_at(target)\n    if first is None or first.faction == ctx.entity(caster).faction:\n        ctx.log(\"The lightning finds no target and fizzles.\")\n        return\n    struck = []\n    current = first\n    for amount in DAMAGES:\n        if current is None:\n            break\n        ctx.damage(current.id, amount, source=caster)\n        struck.append(current.id)\n        last_pos = current.pos\n        candidates = [\n            e for e in ctx.entities_in_radius(last_pos, ARC_RADIUS)\n            if e.faction == \"enemy\" and e.id not in struck\n        ]\n        if not candidates:\n            current = None\n            continue\n        candidates.sort(key=lambda e: (last_pos.distance_to(e.pos), e.id))\n        current = candidates[0]\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"Zap the nearest enemy for 6 damage, then arc to up to 2 more nearby enemies, losing power with each jump.\",\n    mana_cost=4,\n    cooldown=2,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n\n\n# ---- art (drawn by the Artist) ----\n\ndefine_sprite(\n    id='bench_2_art',\n    palette={\n        'k': '#140d1c',\n        'b': '#2a5fd6',\n        'c': '#5aa8ff',\n        'w': '#eaf6ff',\n        'y': '#bfe6ff',\n    },\n    rows=[\n        '................',\n        '..........kkk...',\n        '....kk....kcwk..',\n        '...kcwk...kcck..',\n        '...kcck..kkbk...',\n        '...kbkk.kkck....',\n        '.kkkcck.kcwk....',\n        'kcwbbcwkkcck....',\n        'kcwcbbcwwck.....',\n        '.kbkkcccck.kkk..',\n        '......kcckkcwk..',\n        '.....kkcwwwbck..',\n        '.....kcbbcckkk..',\n        '....kkcwbk......',\n        '....kcckkk......',\n        '....kkk.........',\n    ],\n)\n",
+    "team": {
+     "design": {
+      "name": "Chain Lightning",
+      "description": "Zap the nearest enemy for 6 damage, then arc to up to 2 more nearby enemies, losing power with each jump.",
+      "mana_cost": 4,
+      "cooldown": 2,
+      "effects": [
+       "Deals 6 lightning damage to the initial target.",
+       "Arcs to the nearest other enemy within 3 tiles of the previous target, dealing 4 damage.",
+       "Arcs a final time to the nearest remaining enemy within 3 tiles of the previous target, dealing 2 damage."
+      ],
+      "needs_sprite": true
+     },
+     "review": {
+      "verdict": "approve",
+      "rationale": "Chain Lightning's damage per target stays within budget (6/4/2 across up to three enemies, each below the single/area caps) and the cooldown plus mana cost keep it from being spammed.",
+      "changes": [],
+      "exploits_considered": [
+       "Recast to stack or refresh nothing since it's instant damage with no lingering effect",
+       "Chaining back to already-struck targets is explicitly blocked",
+       "No self/ally damage since it targets only enemy faction",
+       "Cooldown 2 with mana cost 4 prevents spamming faster than mana regen allows"
+      ]
+     },
+     "speculation": "used",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 7.4,
+       "tokens": 2691,
+       "cost_usd": 0.0108
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 12.2,
+       "tokens": 4744,
+       "cost_usd": 0.0195
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 9.6,
+       "tokens": 11160,
+       "cost_usd": 0.0122
+      },
+      "artist": {
+       "model": "claude-opus-5",
+       "seconds": 7.1,
+       "tokens": 1893,
+       "cost_usd": 0.0171
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 17.1,
+    "input_tokens": 15551,
+    "cache_read_tokens": 0,
+    "output_tokens": 1918,
+    "cost_usd": 0.0575,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain jumps use entities_in_radius around the previous target's stored position, excluding already-hit ids and the caster's own faction. Damages 6/4/2 across up to 3 targets.",
+    "source": "DAMAGES = [6, 4, 2]\nJUMP_RADIUS = 3\n\n\ndef on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The lightning crackles into empty air.\")\n        return\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    hit_ids = []\n    current_pos = victim.pos\n    current_id = victim.id\n    for i, amount in enumerate(DAMAGES):\n        if current_id is None:\n            break\n        hit_ids.append(current_id)\n        ctx.damage(current_id, amount, source=caster)\n        if i == len(DAMAGES) - 1:\n            break\n        candidates = []\n        for other in ctx.entities_in_radius(current_pos, JUMP_RADIUS):\n            if other.id == caster:\n                continue\n            if other.id in hit_ids:\n                continue\n            if other.faction == me.faction:\n                continue\n            candidates.append(other)\n        if not candidates:\n            break\n        candidates.sort(key=lambda e: (current_pos.distance_to(e.pos), e.id))\n        nxt = candidates[0]\n        current_pos = nxt.pos\n        current_id = nxt.id\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"A bolt of lightning strikes the nearest enemy in range, then arcs to up to 2 more nearby enemies, losing power with each jump.\",\n    mana_cost=4,\n    cooldown=2,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n",
+    "team": {
+     "design": {
+      "name": "Chain Lightning",
+      "description": "A bolt of lightning strikes the nearest enemy in range, then arcs to up to 2 more nearby enemies, losing power with each jump.",
+      "mana_cost": 4,
+      "cooldown": 2,
+      "effects": [
+       "Deals 6 damage to the target, then jumps to the nearest other enemy within 3 tiles of the previous target for 4 damage, then jumps once more within 3 tiles for 2 damage."
+      ],
+      "needs_sprite": false
+     },
+     "review": {
+      "verdict": "approve",
+      "rationale": "Chain Lightning's total damage output (6+4+2=12 across up to 3 targets) is in line with the mana cost and cooldown, roughly matching the multi-target damage budget, and the falloff plus range-3 chain limit prevent it from being strictly better than Firebolt against single targets.",
+      "changes": [],
+      "exploits_considered": [
+       "Stacking chains via recast for repeated big hits - prevented by cooldown 2 and mana cost 4",
+       "Hitting caster or allies - not applicable, entity-targeted enemies only",
+       "Infinite chain loops - capped at 3 targets with no-repeat rule"
+      ]
+     },
+     "speculation": "used",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 5.7,
+       "tokens": 2495,
+       "cost_usd": 0.0089
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 10.7,
+       "tokens": 4290,
+       "cost_usd": 0.0169
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 7.0,
+       "tokens": 10684,
+       "cost_usd": 0.0317
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 38.1,
+    "input_tokens": 21897,
+    "cache_read_tokens": 15254,
+    "output_tokens": 4866,
+    "cost_usd": 0.0668,
+    "spell": "Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Wolf is a summoned monster (faction player) with a fading status that kills it silently after 5 of its own turns via on_expire; casting while one exists kills the old wolf first by full damage before summoning a new one.",
+    "source": "WOLF_HP = 8\nWOLF_ATTACK = 3\nWOLF_DURATION = 5\n\n\ndef find_free_tile(ctx, origin, target):\n    if ctx.is_walkable(target):\n        return target\n    best = None\n    best_dist = None\n    for pos in target.neighbors():\n        if ctx.is_walkable(pos):\n            d = pos.distance_to(origin)\n            if best is None or d < best_dist:\n                best = pos\n                best_dist = d\n    return best\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    for other in ctx.entities(\"player\"):\n        if other.kind == \"spirit_wolf\":\n            wolf = ctx.entity(other.id)\n            if wolf is not None and wolf.alive:\n                ctx.damage(wolf.id, wolf.hp + 1000, source=None)\n\n    spot = find_free_tile(ctx, me.pos, target)\n    if spot is None:\n        ctx.log(\"There is nowhere to summon the spirit wolf.\")\n        ctx.apply_status(caster, \"spirit_wolf_refund_noop\", None) if False else None\n        ctx.heal(caster, 0)\n        ctx.log(\"The spell fizzles and your mana is refunded.\")\n        ctx.apply_status(caster, \"no_such_status\", None) if False else None\n        ctx.player()\n        ctx.apply_status(caster, \"spirit_wolf_fizzle\", None) if False else None\n        return \"refund\"\n\n    wolf_id = ctx.spawn(\"spirit_wolf\", spot, faction=\"player\")\n    if wolf_id is None:\n        return \"refund\"\n    ctx.apply_status(wolf_id, \"spirit_wolf_fading\", WOLF_DURATION, source=caster)\n    ctx.log(\"A spectral wolf answers your call!\")\n\n\ndef on_fade_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is not None and wolf.alive:\n        ctx.damage(wolf.id, wolf.hp + 1000, source=None)\n\n\ndef act(ctx, me):\n    wolf = ctx.entity(me)\n    if wolf is None:\n        return\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndefine_status(\n    id=\"spirit_wolf_fading\",\n    name=\"Fading\",\n    description=\"This spirit wolf will vanish when its time runs out.\",\n    on_expire=on_fade_expire,\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A translucent spectral wolf summoned to fight at your side.\",\n    glyph=\"w\",\n    max_hp=WOLF_HP,\n    attack=WOLF_ATTACK,\n    act=act,\n    sprite=\"bench_4_art\",\n)\n\ndefine_spell(\n    id=\"spirit_wolf\",\n    name=\"Spirit Wolf\",\n    description=\"Summons a spectral wolf ally adjacent to you that fights for 5 turns before fading away.\",\n    mana_cost=5,\n    cooldown=5,\n    target=\"tile\",\n    range=1,\n    on_cast=on_cast,\n)\n\n\n# ---- art (drawn by the Artist) ----\n\ndefine_sprite(\n    id='bench_4_art',\n    palette={\n        'k': '#140d1c',\n        'w': '#eaf6ff',\n        'b': '#a8d8f0',\n        'd': '#5f9ec9',\n        'm': '#7fb6d8',\n        'c': '#3ef0ff',\n    },\n    rows=[\n        '..........kk.kk.',\n        '.........kwkkwwk',\n        '.........kwwwwwk',\n        '....kkkkkbwbcwwk',\n        '...kwwwwwbbbwwbk',\n        '..kwbbbbbbbbbbkk',\n        '.kmwbbbbbbbbbk..',\n        'kmkbbbbbbbbdbk..',\n        '.kmbbbbbbbbbdk..',\n        '..kbbdbbbbbddk..',\n        '..kbbkbbbbkddk..',\n        '..kbk.kbbk.kdk..',\n        '..kbk.kbbk.kdk..',\n        '..kbk.kdbk.kdk..',\n        '..kkk.kkkk.kkk..',\n        '...m....m....m..',\n    ],\n)\n",
+    "team": {
+     "design": {
+      "name": "Spirit Wolf",
+      "description": "Summons a spectral wolf ally adjacent to you that fights for 5 turns before fading away.",
+      "mana_cost": 5,
+      "cooldown": 5,
+      "effects": [
+       "Summons a translucent spirit wolf ally with 8 HP and 4 attack that fights alongside the player for 5 turns, then vanishes."
+      ],
+      "needs_sprite": true
+     },
+     "review": {
+      "verdict": "adjust",
+      "rationale": "Nice idea, but the wolf's attack is a bit too high for its cost\u2014capping it at 3 keeps it in line with other summons.",
+      "changes": [
+       {
+        "field": "effects[0].amount(attack)",
+        "before": "4 attack",
+        "after": "3 attack",
+        "reason": "Summon attack must not exceed 3 per the budget rules."
+       }
+      ],
+      "exploits_considered": [
+       "Attack of 4 exceeds the 3-attack cap for summons",
+       "Recast-replace rule prevents stacking, which is good",
+       "Duration/cooldown ratio is fine and prevents permanent uptime"
+      ]
+     },
+     "speculation": "discarded",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 7.5,
+       "tokens": 2609,
+       "cost_usd": 0.01
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 12.3,
+       "tokens": 9431,
+       "cost_usd": 0.0199
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 17.6,
+       "tokens": 11999,
+       "cost_usd": 0.0218
+      },
+      "artist": {
+       "model": "claude-opus-5",
+       "seconds": 14.9,
+       "tokens": 2724,
+       "cost_usd": 0.0375
+      }
+     }
+    }
+   }
+  },
+  {
+   "model": "team-artist",
+   "effort": "-",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 22.7,
+    "input_tokens": 19499,
+    "cache_read_tokens": 1556,
+    "output_tokens": 3395,
+    "cost_usd": 0.0781,
+    "spell": "Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Wolf is a monster with a fading status (duration 5) that kills it via damage on expire; casting again removes any existing spirit_wolf before summoning a new one. Tile validity checked with fallback to nearest walkable neighbor within range, and mana refunded via a self-heal-like check isn't needed since range/mana already validated before on_cast (fizzle just logs, engine already deducted mana normally, so we refund by healing mana).",
+    "source": "WOLF_HP = 8\nWOLF_ATTACK = 3\nWOLF_DURATION = 5\n\n\ndef act(ctx, me):\n    wolf = ctx.entity(me)\n    if wolf is None:\n        return\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndef on_fade_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is None or not wolf.alive:\n        return\n    ctx.log(\"The spirit wolf fades away into mist.\")\n    ctx.damage(status.holder, wolf.hp, source=None)\n\n\ndefine_status(\n    id=\"spirit_wolf_fading\",\n    name=\"Fading\",\n    description=\"This spirit wolf will vanish when its time runs out.\",\n    on_expire=on_fade_expire,\n    appearance=\"bench_5_art\",\n)\n\n\ndef on_cast(ctx, caster, target):\n    player = ctx.entity(caster)\n    if player is None:\n        return\n\n    # Remove any existing spirit wolf ally.\n    for e in ctx.entities(\"player\"):\n        if e.kind == \"spirit_wolf\":\n            ctx.damage(e.id, e.hp, source=caster)\n\n    spot = None\n    if ctx.is_walkable(target):\n        spot = target\n    else:\n        candidates = [p for p in target.neighbors() if ctx.is_walkable(p) and player.pos.distance_to(p) <= 3]\n        if candidates:\n            spot = ctx.choice(candidates)\n\n    if spot is None:\n        ctx.log(\"The summoning fizzles: no room for the spirit wolf.\")\n        ctx.heal(caster, 0)\n        return\n\n    wolf_id = ctx.spawn(\"spirit_wolf\", spot, faction=\"player\")\n    if wolf_id is None:\n        ctx.log(\"The summoning fizzles: no room for the spirit wolf.\")\n        return\n\n    ctx.apply_status(wolf_id, \"spirit_wolf_fading\", WOLF_DURATION, source=caster)\n    ctx.log(\"A spectral wolf howls into being at your side.\")\n\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A translucent wolf summoned to fight alongside its master.\",\n    glyph=\"w\",\n    max_hp=WOLF_HP,\n    attack=WOLF_ATTACK,\n    act=act,\n    sprite=\"bench_5_art\",\n)\n\ndefine_spell(\n    id=\"spirit_wolf\",\n    name=\"Spirit Wolf\",\n    description=\"Summons a spectral wolf ally that fights alongside you for 5 turns before fading away.\",\n    mana_cost=5,\n    cooldown=6,\n    target=\"tile\",\n    range=3,\n    on_cast=on_cast,\n)\n\n\n# ---- art (drawn by the Artist) ----\n\ndefine_sprite(\n    id='bench_5_art',\n    palette={\n        'k': '#140d1c',\n        'l': '#e4f5fc',\n        'p': '#a8d9ec',\n        'd': '#5f95bf',\n        'g': '#79b8d8',\n        'i': '#59e0ff',\n    },\n    rows=[\n        '.........kk..kk.',\n        '........klpkkppk',\n        '........klppppdk',\n        '...kkk..klppppdk',\n        '..klpkkkklppiipk',\n        '.klllppppppplppk',\n        '.klllppppppppppk',\n        'kglllpppppkppddk',\n        'kgllppppppkkddk.',\n        'kgpppppppppddddk',\n        '.kppppppppppdddk',\n        '.kdppdppdppddddk',\n        '..kppkkpkkpddkk.',\n        '..kpkk.kk.kpdk..',\n        '..kdk...k..kdk..',\n        '..kk....k...kk..',\n    ],\n)\n",
+    "team": {
+     "design": {
+      "name": "Spirit Wolf",
+      "description": "Summons a spectral wolf ally that fights alongside you for 5 turns before fading away.",
+      "mana_cost": 5,
+      "cooldown": 6,
+      "effects": [
+       "Summons an allied spirit wolf with 8 HP that deals 3 damage per attack, fighting for the player for 5 turns then vanishing."
+      ],
+      "needs_sprite": true
+     },
+     "review": {
+      "verdict": "approve",
+      "rationale": "The wolf's stats (8 HP, 3 attack, single summon, 5-turn duration, 6 cooldown) are well within summon budget, and edge cases are handled sensibly.",
+      "changes": [],
+      "exploits_considered": [
+       "Recasting to stack multiple wolves - prevented by single-wolf replacement rule",
+       "Permanent summon - capped duration and expiration handled",
+       "Cheap spam - cooldown 6 with mana 5 limits frequency"
+      ]
+     },
+     "speculation": "used",
+     "agents": {
+      "designer": {
+       "model": "claude-sonnet-5",
+       "seconds": 6.8,
+       "tokens": 2584,
+       "cost_usd": 0.0098
+      },
+      "balancer": {
+       "model": "claude-sonnet-5",
+       "seconds": 6.4,
+       "tokens": 4205,
+       "cost_usd": 0.0153
+      },
+      "coder": {
+       "model": "claude-sonnet-5",
+       "seconds": 15.1,
+       "tokens": 11749,
+       "cost_usd": 0.0408
+      },
+      "artist": {
+       "model": "claude-opus-5",
+       "seconds": 15.3,
+       "tokens": 4356,
+       "cost_usd": 0.0305
+      }
+     }
+    }
+   }
+  }
+ ]
+}

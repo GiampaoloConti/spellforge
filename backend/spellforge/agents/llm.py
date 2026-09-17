@@ -13,9 +13,14 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import anthropic
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+BaseModelT = TypeVar("BaseModelT", bound="BaseModel")
 
 DEFAULT_MODEL = "claude-opus-5"
 DEFAULT_EFFORT = "low"  # measured: ~40% faster than "high" at equal success (docs/evals)
@@ -84,10 +89,23 @@ class AgentConfig:
     def for_role(cls, role: str) -> AgentConfig:
         env = os.environ
         prefix = f"SPELLFORGE_{role.upper()}_"
+        model, effort = ROLE_DEFAULTS.get(role, (DEFAULT_MODEL, DEFAULT_EFFORT))
         return cls(
-            model=env.get(prefix + "MODEL") or env.get("SPELLFORGE_MODEL") or DEFAULT_MODEL,
-            effort=env.get(prefix + "EFFORT") or env.get("SPELLFORGE_EFFORT") or DEFAULT_EFFORT,
+            model=env.get(prefix + "MODEL") or env.get("SPELLFORGE_MODEL") or model,
+            effort=env.get(prefix + "EFFORT") or env.get("SPELLFORGE_EFFORT") or effort,
         )
+
+
+ROLE_DEFAULTS: dict[str, tuple[str, str]] = {
+    # Measured in docs/evals: structured design and review work is as good and much faster on
+    # Sonnet; drawing sprites is where Opus clearly wins.
+    "writer": ("claude-opus-5", "low"),
+    "designer": ("claude-sonnet-5", "low"),
+    "balancer": ("claude-sonnet-5", "low"),
+    "coder": ("claude-sonnet-5", "low"),
+    "artist": ("claude-opus-5", "low"),
+    "dungeon_master": ("claude-sonnet-5", "low"),
+}
 
 
 @dataclass
@@ -207,3 +225,61 @@ def unescape(text: str) -> str:
 
 def credentials_available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
+
+
+async def validated_call(
+    client: anthropic.AsyncAnthropic,
+    config: AgentConfig,
+    *,
+    system: str,
+    messages: list[dict[str, Any]],
+    model: type[BaseModelT],
+    role: str,
+    on_progress: ProgressNote | None = None,
+) -> tuple[BaseModelT, Reply]:
+    """`structured_call` whose reply must also validate as `model`; one repair turn allowed.
+
+    The JSON schema is derived from the model, so the shape is guaranteed by structured
+    outputs; the repair turn covers value limits (e.g. mana_cost above the maximum).
+    """
+    from pydantic import ValidationError
+
+    from spellforge.agents.specs import output_schema
+
+    schema = output_schema(model)
+    reply = await structured_call(
+        client,
+        config,
+        system=system,
+        messages=messages,
+        schema=schema,
+        role=role,
+        on_progress=on_progress,
+    )
+    try:
+        return model.model_validate(reply.data), reply
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in error['loc'])}: {error['msg']}" for error in exc.errors()
+        )
+    repair = messages + [
+        {"role": "assistant", "content": reply.content},
+        {
+            "role": "user",
+            "content": f"Your answer broke these limits: {problems}. Return the corrected JSON.",
+        },
+    ]
+    second = await structured_call(
+        client,
+        config,
+        system=system,
+        messages=repair,
+        schema=schema,
+        role=role,
+        on_progress=on_progress,
+    )
+    second.usage = reply.usage + second.usage
+    try:
+        return model.model_validate(second.data), second
+    except ValidationError as exc:
+        raise AgentError(f"the {role} kept breaking the rules of its task") from exc

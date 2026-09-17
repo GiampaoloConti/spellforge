@@ -14,33 +14,55 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+import anthropic
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
+from spellforge.agents.dungeon_master import DungeonMaster
+from spellforge.agents.factory import make_dungeon_master, make_spell_forge
+from spellforge.agents.forge import SpellForge
 from spellforge.agents.llm import credentials_available
-from spellforge.agents.spell_writer import ClaudeSpellWriter, SpellWriter
 from spellforge.server.session import GameSession
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_STATIC_DIR = REPO_ROOT / "frontend" / "dist"
 
-WriterFactory = Callable[[], SpellWriter | None]
+ForgeFactory = Callable[[], SpellForge | None]
+DungeonMasterFactory = Callable[[], DungeonMaster | None]
 
 
 @cache
-def default_writer() -> SpellWriter | None:
-    """One shared Claude writer (and HTTP connection pool), if credentials are configured."""
-    return ClaudeSpellWriter() if credentials_available() else None
+def _client() -> anthropic.AsyncAnthropic:
+    return anthropic.AsyncAnthropic()
+
+
+@cache
+def default_forge() -> SpellForge | None:
+    """The configured forge (agent team by default), if credentials are configured."""
+    return make_spell_forge(client=_client()) if credentials_available() else None
+
+
+@cache
+def default_dungeon_master() -> DungeonMaster | None:
+    return make_dungeon_master(client=_client()) if credentials_available() else None
 
 
 def create_app(
-    static_dir: Path | None = None, writer_factory: WriterFactory = default_writer
+    static_dir: Path | None = None,
+    forge_factory: ForgeFactory = default_forge,
+    dungeon_master_factory: DungeonMasterFactory = default_dungeon_master,
 ) -> FastAPI:
     app = FastAPI(title="Spellforge")
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "forge": writer_factory() is not None}
+        forge = forge_factory()
+        return {
+            "status": "ok",
+            "forge": forge is not None,
+            "forge_mode": forge.mode if forge is not None else None,
+            "dungeon_master": dungeon_master_factory() is not None,
+        }
 
     @app.websocket("/ws")
     async def play(websocket: WebSocket) -> None:
@@ -54,7 +76,7 @@ def create_app(
                 if connected:
                     await websocket.send_json(message)
 
-        session = GameSession(send, writer=writer_factory())
+        session = GameSession(send, forge=forge_factory(), dungeon_master=dungeon_master_factory())
         try:
             await session.start()
             while True:

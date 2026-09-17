@@ -109,6 +109,28 @@ def _check_sprite_ref(value: object, what: str) -> str | None:
     return _check_id(value, what)
 
 
+def normalize_sprite(palette: object, rows: object) -> tuple[dict[str, str], list[str]]:
+    """Validate pixel art and return it normalized. Raises PluginLoadError explaining why not."""
+    if not isinstance(palette, dict):
+        raise PluginLoadError("sprite palette must be a dict of characters to colors")
+    palette = {key: color for key, color in palette.items() if key != "."}  # always clear
+    if not 1 <= len(palette) <= MAX_SPRITE_COLORS:
+        raise PluginLoadError(f"sprite palette must have 1-{MAX_SPRITE_COLORS} colors")
+    for key, color in palette.items():
+        if not isinstance(key, str) or len(key) != 1 or not key.isprintable():
+            raise PluginLoadError(f"palette key {key!r} must be one printable character")
+        if not isinstance(color, str) or not HEX_COLOR.match(color):
+            raise PluginLoadError(f"palette color {color!r} must look like '#1a2b3c'")
+    fixed = _normalize_rows(rows)
+    for y, row in enumerate(fixed):
+        unknown = sorted({ch for ch in row if ch != "." and ch not in palette})
+        if unknown:
+            raise PluginLoadError(f"sprite row {y} uses colors missing from the palette: {unknown}")
+    if all(ch == "." for row in fixed for ch in row):
+        raise PluginLoadError("sprite is completely transparent")
+    return {str(k): str(v).lower() for k, v in palette.items()}, fixed
+
+
 def _check_hook(value: object, what: str, required: bool = False) -> Any:
     if value is None and not required:
         return None
@@ -276,29 +298,11 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
         darker shade on the bottom-right.
         """
         sprite_id = _check_id(id, "sprite")
-        if not isinstance(palette, dict):
-            raise PluginLoadError("sprite palette must be a dict of characters to colors")
-        palette = {key: color for key, color in palette.items() if key != "."}  # always clear
-        if not 1 <= len(palette) <= MAX_SPRITE_COLORS:
-            raise PluginLoadError(f"sprite palette must have 1-{MAX_SPRITE_COLORS} colors")
-        for key, color in palette.items():
-            if not isinstance(key, str) or len(key) != 1 or not key.isprintable():
-                raise PluginLoadError(f"palette key {key!r} must be one printable character")
-            if not isinstance(color, str) or not HEX_COLOR.match(color):
-                raise PluginLoadError(f"palette color {color!r} must look like '#1a2b3c'")
-        rows = _normalize_rows(rows)
-        for y, row in enumerate(rows):
-            unknown = sorted({ch for ch in row if ch != "." and ch not in palette})
-            if unknown:
-                raise PluginLoadError(
-                    f"sprite row {y} uses colors missing from the palette: {unknown}"
-                )
-        if all(ch == "." for row in rows for ch in row):
-            raise PluginLoadError("sprite is completely transparent")
+        palette, rows = normalize_sprite(palette, rows)
         plugin.sprites.append(
             SpriteDef(
                 id=sprite_id,
-                palette={str(k): str(v).lower() for k, v in palette.items()},
+                palette=palette,
                 rows=tuple(rows),
                 plugin_id=plugin.id,
             )

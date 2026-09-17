@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from test_forge import GOOD, ScriptedWriter
 
+from spellforge.agents.forge import SingleAgentForge
 from spellforge.agents.spell_writer import Attempt, SpellDraft, SpellRequest
 from spellforge.server.app import create_app
 from spellforge.server.session import FORGE_OFFLINE, GameSession
@@ -136,7 +137,7 @@ async def forge(client: Client, idea: str = "a little spark") -> list[dict]:
 
 def test_forge_offline_without_credentials():
     async def scenario():
-        client = Client(writer=None)
+        client = Client(forge=None)
         await client.session.start()
         await client.send(new_game())
         return client, await client.send({"type": "invent", "idea": "a fireball"})
@@ -146,13 +147,15 @@ def test_forge_offline_without_credentials():
         "type": "welcome",
         "forge_available": False,
         "forge_status": FORGE_OFFLINE,
+        "forge_mode": None,
+        "dungeon_master": False,
     }
     assert reply["status"] == "failed" and "ANTHROPIC_API_KEY" in reply["message"]
 
 
 def test_forged_spell_is_hot_loaded_and_castable():
     async def scenario():
-        client = Client(writer=ScriptedWriter(GOOD))
+        client = Client(forge=SingleAgentForge(ScriptedWriter(GOOD)))
         await client.send(new_game())
         messages = await forge(client)
         cast = await client.send(
@@ -162,7 +165,7 @@ def test_forged_spell_is_hot_loaded_and_castable():
         return messages, cast
 
     messages, cast = run(scenario())
-    assert [m["status"] for m in messages] == ["started", "working", "working", "working", "done"]
+    assert messages[0]["status"] == "started" and messages[-1]["status"] == "done"
     assert [m.get("stage") for m in messages[1:4]] == ["writing", "testing", "loading"]
     done = messages[-1]
     assert done["spell"]["name"] == "Spark" and "def on_cast" in done["source"]
@@ -175,7 +178,7 @@ def test_forged_spell_is_hot_loaded_and_castable():
 
 def test_failed_forge_reports_problems():
     async def scenario():
-        client = Client(writer=ScriptedWriter("import os", "import os"))
+        client = Client(forge=SingleAgentForge(ScriptedWriter("import os", "import os")))
         await client.send(new_game())
         return await forge(client)
 
@@ -201,7 +204,7 @@ class GatedWriter:
 def test_game_stays_playable_while_the_forge_works():
     async def scenario():
         writer = GatedWriter()
-        client = Client(writer=writer)
+        client = Client(forge=SingleAgentForge(writer))
         await client.send(new_game())
         await client.send({"type": "invent", "idea": "a spark"})
         busy = await client.send({"type": "invent", "idea": "another"})
@@ -220,7 +223,7 @@ def test_game_stays_playable_while_the_forge_works():
 def test_new_game_cancels_the_forge():
     async def scenario():
         writer = GatedWriter()
-        client = Client(writer=writer)
+        client = Client(forge=SingleAgentForge(writer))
         await client.send(new_game())
         await client.send({"type": "invent", "idea": "a spark"})
         await asyncio.sleep(0)
@@ -241,12 +244,24 @@ def test_new_game_cancels_the_forge():
 
 
 def app_client(tmp_path, writer=None) -> TestClient:
-    return TestClient(create_app(static_dir=tmp_path / "missing", writer_factory=lambda: writer))
+    forge = SingleAgentForge(writer) if writer is not None else None
+    return TestClient(
+        create_app(
+            static_dir=tmp_path / "missing",
+            forge_factory=lambda: forge,
+            dungeon_master_factory=lambda: None,
+        )
+    )
 
 
 def test_websocket_round_trip(tmp_path):
     client = app_client(tmp_path)
-    assert client.get("/api/health").json() == {"status": "ok", "forge": False}
+    assert client.get("/api/health").json() == {
+        "status": "ok",
+        "forge": False,
+        "forge_mode": None,
+        "dungeon_master": False,
+    }
     with client.websocket_connect("/ws") as ws:
         assert ws.receive_json()["type"] == "welcome"
         ws.send_text(json.dumps(new_game(3)))
@@ -282,6 +297,69 @@ def test_each_connection_has_its_own_game(tmp_path):
 
 def test_serves_built_frontend_when_present(tmp_path):
     (tmp_path / "index.html").write_text("<h1>spellforge</h1>")
-    client = TestClient(create_app(static_dir=tmp_path, writer_factory=lambda: None))
+    client = TestClient(
+        create_app(
+            static_dir=tmp_path,
+            forge_factory=lambda: None,
+            dungeon_master_factory=lambda: None,
+        )
+    )
     assert "spellforge" in client.get("/").text
     assert client.get("/api/health").status_code == 200
+
+
+# ---- dungeon master in the session ----------------------------------------------------
+
+
+class ScriptedDungeonMaster:
+    """Returns a finished counter-monster without calling any model."""
+
+    def __init__(self):
+        self.calls = []
+
+    async def create_counter(self, profile, depth, existing, taken_ids, plugin_id, progress):
+        from test_dungeon_master import GOLEM, FakeDMAgent, FakeMonsterBalancer
+        from test_team import FakeArtist, FakeCoder
+
+        from spellforge.agents.dungeon_master import DungeonMaster
+
+        self.calls.append((profile, depth, plugin_id))
+        source = GOLEM.replace("dm_1_art", f"{plugin_id}_art")
+        real = DungeonMaster(FakeDMAgent(), FakeMonsterBalancer(), FakeCoder(source), FakeArtist())
+        return await real.create_counter(profile, depth, existing, taken_ids, plugin_id, progress)
+
+
+def test_clearing_a_level_summons_a_counter_monster_for_deeper_levels():
+    async def scenario():
+        dm = ScriptedDungeonMaster()
+        client = Client(dungeon_master=dm)
+        await client.session.start()
+        await client.send(new_game())
+        game = client.session.game
+        for enemy in [e for e in game.entities.values() if e is not game.player]:
+            if enemy is not list(game.entities.values())[-1]:
+                game.kill(enemy)
+        last = next(e for e in game.entities.values() if e is not game.player)
+        last.hp = 1
+        game.player.pos = next(p for p in last.pos.neighbors() if game.is_walkable(p))
+        step = game.player.pos.direction_to(last.pos)
+        await client.send(
+            {"type": "action", "action": {"kind": "move", "dx": step.x, "dy": step.y}}
+        )
+        await client.session._dm_task
+        return client, dm
+
+    client, dm = run(scenario())
+    assert client.sent[0]["dungeon_master"] is True
+    [(profile, depth, plugin_id)] = dm.calls
+    assert depth == 2 and plugin_id.startswith("dm_") and "Reached depth 1" in profile
+    messages = [m for m in client.sent if m["type"] == "dungeon_master"]
+    assert messages[0]["status"] == "started" and messages[-1]["status"] == "done"
+    done = messages[-1]
+    assert done["monster"]["name"] == "Warded Golem" and done["monster"]["first_depth"] == 2
+    assert done["monster"]["sprite"] in done["sprites"]
+    session = client.session
+    assert session.counter_monsters == [("warded_golem", 2)]
+    assert ("warded_golem", 5) in session.encounters(2)
+    assert all(monster != "warded_golem" for monster, _ in session.encounters(1))
+    run(session.close())

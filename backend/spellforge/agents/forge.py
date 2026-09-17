@@ -15,7 +15,9 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any, Protocol
 
+from spellforge.agents.llm import Usage
 from spellforge.agents.spell_writer import (
     Attempt,
     SpellDraft,
@@ -43,10 +45,12 @@ def changes_appearance(idea: str) -> bool:
     return TRANSFORMATION.search(idea) is not None
 
 
-ProgressCallback = Callable[[str, str], Awaitable[None]]
+ProgressCallback = Callable[..., Awaitable[None]]
+"""`progress(stage, message, **details)`: stage is e.g. "writing", "designing", "testing";
+details carry structured extras for the UI (done=True, verdict=..., detail=...)."""
 
 
-async def _no_progress(stage: str, message: str) -> None:
+async def _no_progress(stage: str, message: str, **details: Any) -> None:
     return None
 
 
@@ -58,16 +62,47 @@ class ForgeOutcome:
     error: str | None = None
     attempts: list[Attempt] = field(default_factory=list)
     seconds: float = 0.0
+    usage: Usage = field(default_factory=Usage)
+    """All model usage for this forge, across agents and attempts."""
+    team: dict[str, Any] | None = None
+    """For the agent team: the design, the Balancer's review, speculation and per-agent cost."""
 
     @property
     def input_tokens(self) -> int:
-        drafts = [a.draft for a in self.attempts] + ([self.draft] if self.ok and self.draft else [])
-        return sum(d.input_tokens for d in drafts)
+        return self.usage.input_tokens
 
     @property
     def output_tokens(self) -> int:
-        drafts = [a.draft for a in self.attempts] + ([self.draft] if self.ok and self.draft else [])
-        return sum(d.output_tokens for d in drafts)
+        return self.usage.output_tokens
+
+    @property
+    def cost_usd(self) -> float:
+        return self.usage.cost_usd
+
+
+class SpellForge(Protocol):
+    """Anything that turns a spell request into a verified plugin: one agent or a team."""
+
+    mode: str
+
+    async def forge(
+        self, request: SpellRequest, plugin_id: str, progress: ProgressCallback = _no_progress
+    ) -> ForgeOutcome: ...
+
+
+class SingleAgentForge:
+    """The M3 baseline: one Spell Writer, verified in the sandbox, with feedback retries."""
+
+    mode = "single"
+
+    def __init__(self, writer: SpellWriter, max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> None:
+        self.writer = writer
+        self.max_attempts = max_attempts
+
+    async def forge(
+        self, request: SpellRequest, plugin_id: str, progress: ProgressCallback = _no_progress
+    ) -> ForgeOutcome:
+        return await forge_spell(request, self.writer, plugin_id, self.max_attempts, progress)
 
 
 async def forge_spell(
@@ -95,6 +130,7 @@ async def forge_spell(
         except SpellWriterError as exc:
             outcome.error = str(exc)
             break
+        outcome.usage = outcome.usage + draft.usage
 
         await progress("testing", f"Testing {draft.spell_id} in the sandbox…")
         verification = await asyncio.to_thread(

@@ -89,9 +89,20 @@ def error_message(message: str) -> dict[str, Any]:
     return {"type": "error", "message": message}
 
 
-def welcome_message(forge_available: bool, forge_status: str) -> dict[str, Any]:
+def welcome_message(
+    forge_available: bool,
+    forge_status: str,
+    forge_mode: str | None = None,
+    dungeon_master: bool = False,
+) -> dict[str, Any]:
     """Sent once when a client connects."""
-    return {"type": "welcome", "forge_available": forge_available, "forge_status": forge_status}
+    return {
+        "type": "welcome",
+        "forge_available": forge_available,
+        "forge_status": forge_status,
+        "forge_mode": forge_mode,
+        "dungeon_master": dungeon_master,
+    }
 
 
 def forge_message(status: str, message: str, **fields: Any) -> dict[str, Any]:
@@ -101,3 +112,12 @@ def forge_message(status: str, message: str, **fields: Any) -> dict[str, Any]:
     source code and the updated game state.
     """
     return {"type": "forge", "status": status, "message": message, **fields}
+
+
+def dungeon_master_message(status: str, message: str, **fields: Any) -> dict[str, Any]:
+    """Progress of a counter-monster being designed, pushed while the game keeps running.
+
+    status: "started" | "working" | "done" | "failed". "done" carries the monster (name,
+    what it counters, its weakness, first depth), its sprite art and the Balancer's review.
+    """
+    return {"type": "dungeon_master", "status": status, "message": message, **fields}
