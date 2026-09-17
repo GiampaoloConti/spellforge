@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREATURES, TILES } from "./art";
+import { CREATURES, ITEMS, SIGIL, TILES } from "./art";
 import { mix, parseHex, toRgba, validateArt, type PixelArt } from "./pixelart";
 
 describe("pixel art", () => {
@@ -9,6 +9,8 @@ describe("pixel art", () => {
     ["wall_face", TILES.wall_face],
     ["wall_top", TILES.wall_top],
     ["stairs", TILES.stairs],
+    ...Object.entries(ITEMS),
+    ["sigil", SIGIL],
   ];
 
   it.each(all)("%s is a valid 16x16 grid with a complete palette", (_name, art) => {

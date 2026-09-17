@@ -1,7 +1,7 @@
 // Draws the game state onto a <canvas> with pixel-art sprites and a camera that follows
 // the player. Knows nothing about the network or input.
 
-import { creatureSprite, floorSprite, tileSprite } from "./atlas";
+import { creatureSprite, floorSprite, itemSprite, tileSprite } from "./atlas";
 import { FLASH_MS, FLOAT_MS, type Effects } from "./effects";
 import {
   cameraOrigin,
@@ -34,6 +34,7 @@ const COLORS = {
   hpBack: "rgba(0, 0, 0, 0.7)",
   hp: "#6fdc8c",
   hpLow: "#ff5470",
+  itemGlow: "rgba(143, 227, 255, 0.28)",
 };
 
 const FONT = 'ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace';
@@ -58,14 +59,15 @@ export class Renderer {
   }
 
   /**
-   * Pick a whole-number zoom so pixel art stays crisp. If the whole map fits at 2x or more,
-   * show it all; otherwise zoom to 2x and let the camera follow the player.
+   * Fill `container` (sized by the page layout, not by the canvas). Pick a whole-number zoom
+   * so pixel art stays crisp: if the whole map fits at 2x or more, show it all; otherwise
+   * zoom to 2x and let the camera follow the player.
    */
   resize(state: GameState, container: HTMLElement): void {
     const cols = state.map[0]?.length ?? 1;
     const rows = state.map.length;
     const width = container.clientWidth;
-    const height = window.innerHeight * 0.72;
+    const height = container.clientHeight;
     const fitScale = Math.floor(Math.min(width / (cols * SPRITE_SIZE), height / (rows * SPRITE_SIZE)));
     this.scale = fitScale >= 2 ? fitScale : width < SPRITE_SIZE * 2 * 12 ? 1 : 2;
     this.tile = SPRITE_SIZE * this.scale;
@@ -115,6 +117,7 @@ export class Renderer {
     ctx.translate(-this.camera.x * this.tile, -this.camera.y * this.tile);
 
     this.drawMap(state);
+    this.drawItems(state, now);
     if (targeting) this.drawTargeting(state, targeting);
     this.updateFacing(state);
     const byRow = [...state.entities].sort((a, b) => a.pos[1] - b.pos[1] || a.id - b.id);
@@ -133,6 +136,22 @@ export class Renderer {
         const sprite = kind === "floor" ? floorSprite(tileHash(x, y)) : tileSprite(kind);
         ctx.drawImage(sprite, x * tile, y * tile, tile, tile);
       }
+    }
+  }
+
+  /** Items float gently above a soft glow, so they read as "pick me up". */
+  private drawItems(state: GameState, now: number): void {
+    const { ctx, tile, scale } = this;
+    const lift = Math.floor(now / BOB_MS) % 2 === 0 ? 0 : -scale;
+    for (const item of state.items) {
+      const sprite = itemSprite(item.kind);
+      if (!sprite) continue;
+      const [x, y] = item.pos;
+      ctx.fillStyle = COLORS.itemGlow;
+      ctx.beginPath();
+      ctx.ellipse((x + 0.5) * tile, (y + 1) * tile - 2.5 * scale, tile * 0.3, 2 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.drawImage(sprite, x * tile, y * tile + lift, tile, tile);
     }
   }
 
@@ -279,6 +298,8 @@ export class Renderer {
 /** One-line description of whatever is on a tile, for the hover readout. */
 export function describeTile(state: GameState, pos: Point): string {
   const entity = entityAt(state, pos);
+  const item = state.items.find((i) => i.pos[0] === pos[0] && i.pos[1] === pos[1]);
+  if (!entity && item) return "Arcane shard: step on it to pick it up. It powers the Arcane Forge.";
   if (!entity) return "";
   const who = entity.id === state.player_id ? "You" : entity.name;
   const statuses = entity.statuses

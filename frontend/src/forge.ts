@@ -4,6 +4,10 @@
 
 import { changeList, PipelineView, SINGLE_STEPS, TEAM_STEPS } from "./pipeline";
 import type { ForgeDone, StageDetails, TeamReport } from "./protocol";
+import { shardIcon } from "./ui";
+
+const LOCKED =
+  "The forge needs an arcane shard. One is hidden on depths 1, 4, 7… Find it and step on it.";
 
 function $<T extends HTMLElement>(root: ParentNode, selector: string): T {
   const node = root.querySelector<T>(selector);
@@ -17,12 +21,15 @@ export class ForgePanel {
   private readonly submit: HTMLButtonElement;
   private readonly count: HTMLElement;
   private readonly offline: HTMLElement;
+  private readonly locked: HTMLElement;
+  private readonly shardChip: HTMLElement;
   private readonly status: HTMLElement;
   private readonly message: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly result: HTMLElement;
   private readonly pipeline: PipelineView;
   private available = false;
+  private shards = 0;
   private working = false;
   private startedAt = 0;
   private tick = 0;
@@ -34,6 +41,8 @@ export class ForgePanel {
     this.submit = $(root, "#forge-submit");
     this.count = $(root, "#forge-count");
     this.offline = $(root, "#forge-offline");
+    this.locked = $(root, "#forge-locked");
+    this.shardChip = $(root, "#forge-shards");
     this.status = $(root, "#forge-status");
     this.message = $(root, "#forge-message");
     this.timer = $(root, "#forge-timer");
@@ -43,7 +52,7 @@ export class ForgePanel {
     this.form.addEventListener("submit", (event) => {
       event.preventDefault();
       const idea = this.idea.value.trim();
-      if (idea.length >= 3 && this.available && !this.working) onSubmit(idea);
+      if (idea.length >= 3 && this.available && this.shards > 0 && !this.working) onSubmit(idea);
     });
     this.idea.addEventListener("input", () => this.updateControls());
     this.idea.addEventListener("keydown", (event) => {
@@ -68,13 +77,21 @@ export class ForgePanel {
     this.updateControls();
   }
 
+  /** How many arcane shards the player carries: forging needs one. */
+  setShards(count: number): void {
+    this.shards = count;
+    this.shardChip.replaceChildren(shardIcon(), document.createTextNode(`× ${count}`));
+    this.shardChip.classList.toggle("empty", count === 0);
+    this.updateControls();
+  }
+
   started(idea: string, mode: "team" | "single"): void {
     this.working = true;
     this.startedAt = performance.now();
     this.idea.value = idea;
     this.result.hidden = true;
     this.status.hidden = false;
-    this.message.textContent = "The arcane forge takes your idea…";
+    this.message.textContent = "The arcane forge consumes a shard and takes your idea…";
     this.pipeline.reset(mode === "team" ? TEAM_STEPS : SINGLE_STEPS);
     window.clearInterval(this.tick);
     this.tick = window.setInterval(() => this.updateTimer(), 250);
@@ -137,9 +154,13 @@ export class ForgePanel {
   private updateControls(): void {
     const length = this.idea.value.trim().length;
     this.count.textContent = `${this.idea.value.length} / 300`;
+    const locked = this.available && !this.working && this.shards === 0;
+    // While locked, the player may still draft an idea; only forging waits for a shard.
     this.idea.disabled = !this.available || this.working;
-    this.submit.disabled = !this.available || this.working || length < 3;
+    this.submit.disabled = !this.available || this.working || locked || length < 3;
     this.submit.textContent = this.working ? "Forging…" : "Forge spell";
+    this.locked.hidden = !locked;
+    this.locked.textContent = LOCKED;
   }
 }
 

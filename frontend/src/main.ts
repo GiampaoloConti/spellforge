@@ -2,16 +2,16 @@
 // All game rules live on the server; this file only keeps UI state (e.g. targeting).
 
 import "./style.css";
-import { clearPluginSprites, registerSprites } from "./atlas";
+import { clearPluginSprites, registerSprites, sigilSprite } from "./atlas";
 import { GameConnection, serverUrl, type ConnectionStatus } from "./connection";
 import { Effects } from "./effects";
 import { DungeonMasterPanel } from "./dungeonMaster";
 import { ForgePanel } from "./forge";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
-import type { ActionPayload, GameState, Point, ServerMessage } from "./protocol";
+import type { ActionPayload, DevCommand, GameState, Point, ServerMessage } from "./protocol";
 import { BOB_MS, describeTile, Renderer, type Targeting } from "./renderer";
-import { Log, renderSpells, renderStats } from "./ui";
+import { Log, renderSpells, renderStats, shardCount } from "./ui";
 
 /** Look up a required element; fail loudly if index.html and this file disagree. */
 function $<T extends HTMLElement>(selector: string): T {
@@ -23,13 +23,14 @@ function $<T extends HTMLElement>(selector: string): T {
 const canvas = $<HTMLCanvasElement>("#board");
 const boardWrap = $<HTMLElement>("#board-wrap");
 const overlay = $<HTMLElement>("#overlay");
-const hoverInfo = $<HTMLElement>("#hover-info");
+const caption = $<HTMLElement>("#board-caption");
 const connectionPill = $<HTMLElement>("#connection");
 const runInfo = $<HTMLElement>("#run-info");
 const stats = $<HTMLElement>("#stats");
 const spells = $<HTMLElement>("#spells");
-const targetingHint = $<HTMLElement>("#targeting-hint");
 const banner = $<HTMLElement>("#banner");
+
+drawBrand();
 
 const renderer = new Renderer(canvas);
 const effects = new Effects();
@@ -46,6 +47,7 @@ let targeting: Targeting | null = null;
 let awaitingReply = false; // one action at a time: ignore input until the server answers
 let startingNewGame = false;
 let hadConnection = false;
+let hoverText = "";
 const newSpellIds = new Set<string>(); // forged spells not cast yet, shown with a badge
 
 const connection = new GameConnection(serverUrl(), {
@@ -111,6 +113,8 @@ function handleMessage(message: ServerMessage): void {
       showBanner(`Depth ${event.depth}`);
     } else if (event.type === "level_cleared") {
       showBanner("Stairs down opened");
+    } else if (event.type === "item_picked_up") {
+      showBanner("Arcane shard found");
     }
   }
   state = message.state;
@@ -125,7 +129,8 @@ function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
   switch (message.status) {
     case "started":
       forge.started(message.idea, message.mode);
-      log.add([`The forge begins work on: “${message.idea}”`], "system");
+      log.add([`The forge consumes a shard and begins work on: “${message.idea}”`], "system");
+      adoptState(message.state);
       break;
     case "working":
       forge.progress(message, message.message);
@@ -133,18 +138,23 @@ function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
     case "failed":
       forge.failed(message.message, message.problems, message.team ?? null);
       log.add([message.message], "error");
+      if (message.state) adoptState(message.state);
       break;
     case "done":
       forge.done(message);
       newSpellIds.add(message.spell.id);
       registerSprites(message.sprites);
       log.add([`✦ ${message.message}`], "system");
-      if (state && !startingNewGame) {
-        state = message.state;
-        refresh();
-      }
+      adoptState(message.state);
       break;
   }
+}
+
+/** A state pushed alongside a forge update (not a reply to the player's own action). */
+function adoptState(next: GameState): void {
+  if (!state || startingNewGame) return;
+  state = next;
+  refresh();
 }
 
 function handleDungeonMaster(message: Extract<ServerMessage, { type: "dungeon_master" }>): void {
@@ -180,6 +190,7 @@ function showConnection(status: ConnectionStatus): void {
   connectionPill.textContent = { connecting: "connecting…", open: "online", closed: "offline" }[
     status
   ];
+  connectionPill.title = status === "closed" ? "Lost connection to the server; retrying…" : "";
   connectionPill.dataset.status = status;
   if (status === "closed") awaitingReply = false;
 }
@@ -315,11 +326,17 @@ window.addEventListener("keydown", (event) => {
 canvas.addEventListener("mousemove", (event) => {
   if (!state) return;
   const tile = renderer.tileAt(state, event.clientX, event.clientY);
-  hoverInfo.textContent = tile ? describeTile(state, tile) : "";
+  hoverText = tile ? describeTile(state, tile) : "";
+  updateCaption();
   if (targeting && tile) {
     targeting.cursor = tile;
     requestDraw();
   }
+});
+
+canvas.addEventListener("mouseleave", () => {
+  hoverText = "";
+  updateCaption();
 });
 
 canvas.addEventListener("click", (event) => {
@@ -341,22 +358,22 @@ $<HTMLButtonElement>("#new-game").addEventListener("click", () =>
 );
 $<HTMLButtonElement>("#overlay-new").addEventListener("click", newGame);
 
-window.addEventListener("resize", () => {
+// The board fills whatever space the layout gives it, so follow the wrapper's size.
+new ResizeObserver(() => {
   if (!state) return;
   renderer.resize(state, boardWrap);
   requestDraw();
-});
+}).observe(boardWrap);
 
 // ---- drawing -----------------------------------------------------------------------
 
 function refresh(): void {
   if (!state) return;
-  runInfo.textContent = `seed ${state.seed}`;
+  runInfo.textContent = `Depth ${state.depth} · Turn ${state.turn} · Seed ${state.seed}`;
   renderStats(stats, state);
   renderSpells(spells, state, targeting?.spell.id ?? null, selectSpell, newSpellIds);
-  targetingHint.textContent = targeting
-    ? `Aiming ${targeting.spell.name}: click or Enter to cast, Tab for next target, Esc to cancel.`
-    : "";
+  forge.setShards(shardCount(state));
+  updateCaption();
 
   overlay.hidden = state.status === "playing";
   if (state.status === "lost") {
@@ -365,6 +382,26 @@ function refresh(): void {
       `The dungeon claimed you on depth ${state.depth}, after ${state.turn} turns.`;
   }
   requestDraw();
+}
+
+/** One line over the bottom of the board: the aiming hint wins over the hover readout. */
+function updateCaption(): void {
+  caption.textContent = targeting
+    ? `Aiming ${targeting.spell.name}: click or Enter to cast · Tab next target · Esc cancel`
+    : hoverText;
+  caption.classList.toggle("aiming", targeting !== null);
+}
+
+/** Draw the pixel-art sigil into the header and use it as the favicon. */
+function drawBrand(): void {
+  const sigil = $<HTMLCanvasElement>("#sigil");
+  sigil.getContext("2d")!.drawImage(sigilSprite(), 0, 0);
+  const icon = document.createElement("canvas");
+  icon.width = icon.height = 64;
+  const ctx = icon.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sigilSprite(), 0, 0, 64, 64);
+  $<HTMLLinkElement>("#favicon").href = icon.toDataURL();
 }
 
 let frame = 0;
@@ -383,12 +420,12 @@ function drawFrame(now: number): void {
 
 setInterval(requestDraw, BOB_MS); // idle animation
 
-// Development helpers for demos and automated checks: `spellforgeDev("clear_level")` or
-// `spellforgeDev("descend")` in the browser
-// console. The server ignores them unless started with SPELLFORGE_DEV_TOOLS=1.
+// Development helpers for demos and automated checks: `spellforgeDev("clear_level")`,
+// `spellforgeDev("descend")` or `spellforgeDev("give_shard")` in the browser console.
+// The server ignores them unless started with SPELLFORGE_DEV_TOOLS=1.
 declare global {
   interface Window {
-    spellforgeDev: (command: "clear_level" | "descend") => void;
+    spellforgeDev: (command: DevCommand) => void;
   }
 }
 window.spellforgeDev = (command) => {

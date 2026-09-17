@@ -52,6 +52,11 @@ export interface SpellState {
   disabled: boolean;
 }
 
+export interface ItemState {
+  kind: string; // "arcane_shard"
+  pos: Point;
+}
+
 export interface GameState {
   seed: number;
   player_id: number;
@@ -61,6 +66,8 @@ export interface GameState {
   map: string[]; // rows of "#" (wall) and "." (floor)
   entities: EntityState[];
   spells: SpellState[];
+  items: ItemState[]; // lying on the floor
+  inventory: Record<string, number>; // carried by the player: item kind -> count
   disabled_plugins: Record<string, string>;
 }
 
@@ -178,7 +185,14 @@ export type ServerMessage =
       dungeon_master: boolean;
     }
   // The forge messages all have type "forge"; `status` tells them apart.
-  | { type: "forge"; status: "started"; message: string; idea: string; mode: "team" | "single" }
+  | {
+      type: "forge";
+      status: "started";
+      message: string;
+      idea: string;
+      mode: "team" | "single";
+      state: GameState; // an arcane shard was spent
+    }
   | ({ type: "forge"; status: "working"; message: string } & StageDetails)
   | ForgeDone
   | {
@@ -187,6 +201,7 @@ export type ServerMessage =
       message: string;
       problems?: string[];
       team?: TeamReport | null;
+      state?: GameState; // present when the shard was given back
     }
   // Same pattern for the Dungeon Master.
   | { type: "dungeon_master"; status: "started"; message: string; depth: number }
@@ -203,4 +218,6 @@ export type ClientMessage =
   | { type: "new_game"; seed: number | null }
   | { type: "action"; action: ActionPayload }
   | { type: "invent"; idea: string } // 3-300 characters
-  | { type: "dev"; command: "clear_level" | "descend" }; // honoured only with dev tools enabled
+  | { type: "dev"; command: DevCommand }; // honoured only with dev tools enabled
+
+export type DevCommand = "clear_level" | "descend" | "give_shard";

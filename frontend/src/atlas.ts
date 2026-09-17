@@ -3,7 +3,7 @@
 // Two sources of creature art: the player's sprite in art.ts, and sprites defined by
 // plugins on the server (monsters, forged spells), registered as they arrive.
 
-import { CREATURES, TILES } from "./art";
+import { CREATURES, ITEMS, SIGIL, TILES } from "./art";
 import { SPRITE_SIZE, toRgba, validateArt, type PixelArt } from "./pixelart";
 import type { SpriteArt } from "./protocol";
 
@@ -48,6 +48,16 @@ export function creatureSprite(id: string, frozen: boolean): HTMLCanvasElement |
   if (fromPlugin) return render(`plugin:${id}:${frozen}`, fromPlugin, frozen);
   const builtin = CREATURES[id];
   return builtin ? render(`creature:${id}:${frozen}`, builtin, frozen) : null;
+}
+
+/** The image for an item on the floor, or null for unknown kinds. */
+export function itemSprite(kind: string): HTMLCanvasElement | null {
+  const art = ITEMS[kind];
+  return art ? render(`item:${kind}`, art) : null;
+}
+
+export function sigilSprite(): HTMLCanvasElement {
+  return render("sigil", SIGIL);
 }
 
 export function floorSprite(variant: number): HTMLCanvasElement {

@@ -180,3 +180,65 @@ export const TILES = {
     "1222222222222222",
   ]),
 };
+
+/** Items lying on the floor, by item kind. */
+export const ITEMS: Record<string, PixelArt> = {
+  arcane_shard: {
+    palette: {
+      "k": "#140d1c", // outline
+      "C": "#f4ffff", // glint
+      "c": "#8fe3ff", // crystal
+      "v": "#7b5cff", // crystal shade
+      "y": "#f2c14e", // sparkle
+    },
+    rows: [
+      "................",
+      "................",
+      "................",
+      "........kk....y.",
+      ".......kCck.....",
+      "......kCcck.....",
+      "......kCcvk.....",
+      ".....kCccvk.....",
+      ".....kCcvvk.....",
+      "....kCccvvk.....",
+      "....kCcvvk......",
+      "..y.kCcvvk......",
+      "...kCcvvk.......",
+      "...kccvk........",
+      "....kvk.........",
+      "................",
+    ],
+  },
+};
+
+/** The Spellforge mark: an anvil with an arcane spark. Also used as the favicon. */
+export const SIGIL: PixelArt = {
+  palette: {
+    "k": "#140d1c", // outline
+    "A": "#a7a3b8", // iron light
+    "a": "#76728a", // iron
+    "d": "#4a4660", // iron shade
+    "f": "#8a63d2", // spark
+    "F": "#d9c6ff", // spark light
+    "y": "#f2c14e", // embers
+  },
+  rows: [
+    "........y.......",
+    ".......kfk......",
+    "......kfFfk..y..",
+    "......kfFFk.....",
+    "..y...kFFfk.....",
+    ".......kfk......",
+    "................",
+    "kkkkkkkkkkkkkkkk",
+    "kAAAAAAAAAAAAAAk",
+    ".kkkaaaaaaaaadk.",
+    "....kkaaaaaddk..",
+    ".....kaaaaadk...",
+    ".....kaaaaadk...",
+    "....kaaaaaaadk..",
+    "...kAAAAAAAAAdk.",
+    "...kkkkkkkkkkkk.",
+  ],
+};

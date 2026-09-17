@@ -39,6 +39,8 @@ function game(map: string[], entities: EntityState[]): GameState {
     map,
     entities,
     spells: [],
+    items: [],
+    inventory: {},
     disabled_plugins: {},
   };
 }

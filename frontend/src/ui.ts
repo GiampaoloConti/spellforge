@@ -1,10 +1,14 @@
-// The sidebar: stats, spell list and message log, built with DOM elements.
+// The dock under the board: health, mana, shards, the spell hotbar and the message log,
+// built with DOM elements.
 //
 // Text from the server is always set with `textContent`, never `innerHTML`: log lines
-// will soon contain text written by AI-generated plugins and must not become markup.
+// can contain text written by AI-generated plugins and must not become markup.
 
+import { itemSprite } from "./atlas";
 import { player } from "./grid";
 import type { GameState } from "./protocol";
+
+export const SHARD = "arcane_shard";
 
 /** Create an element with a class and optional text: el("li", "log-line", "Hello"). */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -21,25 +25,39 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 function meter(label: string, value: number, max: number, kind: string): HTMLElement {
-  const wrap = el("div", "meter");
-  const head = el("div", "meter-head");
-  head.append(el("span", "", label), el("span", "meter-value", `${value} / ${max}`));
-  const bar = el("div", `meter-bar ${kind}`);
+  const wrap = el("div", `meter ${kind}`);
+  wrap.title = label;
+  const bar = el("div", "meter-bar");
   const fill = el("div", "meter-fill");
   fill.style.width = `${max > 0 ? (100 * Math.max(0, value)) / max : 0}%`;
-  bar.append(fill);
-  wrap.append(head, bar);
+  bar.append(fill, el("span", "meter-value", `${label} ${value}/${max}`));
+  wrap.append(bar);
   return wrap;
+}
+
+/** A small crisp image of the shard sprite, for text-sized UI. */
+export function shardIcon(): HTMLImageElement {
+  const icon = el("img", "shard-icon");
+  icon.alt = "";
+  icon.src = itemSprite(SHARD)?.toDataURL() ?? "";
+  return icon;
+}
+
+export function shardCount(state: GameState): number {
+  return state.inventory[SHARD] ?? 0;
 }
 
 export function renderStats(container: HTMLElement, state: GameState): void {
   const me = player(state);
-  const hp = me?.hp ?? 0;
-  const statuses = me?.statuses.map((s) => s.id).join(", ");
+  const shards = el("span", "chip shards");
+  shards.title = "Arcane shards: each one lets you forge a spell";
+  shards.append(shardIcon(), el("span", "", `${shardCount(state)}`));
+  const statuses = el("span", "statuses muted", me?.statuses.map((s) => s.id).join(", ") ?? "");
   container.replaceChildren(
-    meter("Health", hp, me?.max_hp ?? 20, "hp"),
+    meter("HP", me?.hp ?? 0, me?.max_hp ?? 20, "hp"),
     meter("Mana", me?.mana ?? 0, me?.max_mana ?? 10, "mana"),
-    el("p", "muted", `Depth ${state.depth} · Turn ${state.turn}${statuses ? ` · ${statuses}` : ""}`),
+    shards,
+    statuses,
   );
 }
 
@@ -72,7 +90,7 @@ export function renderSpells(
       button.append(
         el("kbd", "", String(index + 1)),
         name,
-        el("span", "spell-cost", `${spell.mana_cost} mana`),
+        el("span", "spell-cost", `${spell.mana_cost}`),
         el("span", "spell-meta", status),
       );
       button.addEventListener("click", () => onSelect(index));

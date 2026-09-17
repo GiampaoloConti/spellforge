@@ -5,36 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>Spellforge</title>
+    <!-- The favicon is drawn from the pixel-art sigil at startup (see main.ts). -->
+    <link id="favicon" rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>"
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap"
     />
   </head>
   <body>
     <header class="topbar">
-      <h1>Spellforge</h1>
-      <span id="connection" class="pill" data-status="connecting">connecting…</span>
-      <span id="run-info" class="muted"></span>
-      <button id="new-game" type="button" class="ghost">New game <kbd>N</kbd></button>
+      <a class="brand" href="/" aria-label="Spellforge">
+        <canvas id="sigil" class="sigil" width="16" height="16" aria-hidden="true"></canvas>
+        <span class="wordmark">Spellforge</span>
+      </a>
+      <span id="run-info" class="run-info"></span>
+      <span id="connection" class="connection" data-status="connecting">connecting…</span>
+      <div class="topbar-actions">
+        <button id="help-button" type="button" class="ghost square" popovertarget="help" aria-label="Controls">?</button>
+        <button id="new-game" type="button" class="ghost">New game <kbd>N</kbd></button>
+      </div>
     </header>
 
+    <div id="help" class="help" popover>
+      <h2>How to play</h2>
+      <p>
+        Clear each level to open the stairs down. Every third level hides an
+        <strong>arcane shard</strong>: bring it to the Arcane Forge and describe any spell you
+        can imagine. A team of AI agents designs, balances, codes and tests it while you play.
+      </p>
+      <dl>
+        <dt><kbd>WASD</kbd> <kbd>QEZC</kbd> / arrows</dt>
+        <dd>move; walk into enemies to attack</dd>
+        <dt><kbd>.</kbd> / <kbd>Space</kbd></dt>
+        <dd>wait a turn</dd>
+        <dt><kbd>1</kbd>–<kbd>9</kbd></dt>
+        <dd>cast; aim with the mouse or keys, <kbd>Tab</kbd> for the next target</dd>
+        <dt><kbd>Enter</kbd> / click</dt>
+        <dd>confirm the target; <kbd>Esc</kbd> or right click cancels</dd>
+        <dt><kbd>F</kbd></dt>
+        <dd>write a spell idea at the forge (<kbd>Enter</kbd> to forge)</dd>
+        <dt><kbd>N</kbd></dt>
+        <dd>new game</dd>
+      </dl>
+    </div>
+
     <main class="layout">
-      <section class="board-panel">
+      <section class="play">
         <div id="board-wrap" class="board-wrap">
           <canvas id="board" aria-label="Dungeon map"></canvas>
           <div id="banner" class="banner" aria-live="polite"></div>
+          <p id="board-caption" class="board-caption" aria-live="polite"></p>
           <div id="overlay" class="overlay" hidden>
             <h2 id="overlay-title"></h2>
             <p id="overlay-text"></p>
             <button id="overlay-new" type="button">New game</button>
           </div>
         </div>
-        <p id="hover-info" class="hover-info" aria-live="polite"></p>
+
+        <div class="dock">
+          <div class="hud">
+            <div id="stats" class="stats"></div>
+            <ol id="spells" class="hotbar" aria-label="Spells"></ol>
+          </div>
+          <ul id="log" class="log" aria-label="Log" aria-live="polite"></ul>
+        </div>
       </section>
 
-      <aside class="sidebar">
-        <section id="forge" class="card forge">
-          <h2>Arcane Forge <kbd>F</kbd></h2>
+      <aside class="agents">
+        <section id="forge" class="panel forge">
+          <header class="panel-head">
+            <h2>Arcane Forge</h2>
+            <span id="forge-shards" class="shard-count" title="Arcane shards: one per spell"></span>
+          </header>
           <form id="forge-form">
             <textarea
               id="forge-idea"
@@ -47,7 +91,8 @@
               <button id="forge-submit" type="submit">Forge spell</button>
             </div>
           </form>
-          <p id="forge-offline" class="forge-offline" hidden></p>
+          <p id="forge-locked" class="forge-note" hidden></p>
+          <p id="forge-offline" class="forge-note" hidden></p>
           <div id="forge-status" class="forge-status" hidden aria-live="polite">
             <div class="forge-working">
               <span class="forge-spinner" aria-hidden="true"></span>
@@ -59,10 +104,13 @@
           <div id="forge-result" class="forge-result" hidden aria-live="polite"></div>
         </section>
 
-        <section id="dm" class="card dm" hidden>
-          <h2>Dungeon Master</h2>
+        <section id="dm" class="panel dm" hidden>
+          <header class="panel-head">
+            <h2>Dungeon Master</h2>
+          </header>
           <p id="dm-idle" class="muted dm-idle">
-            Clear a level and the Dungeon Master will answer your favourite tactic with a new monster.
+            Clear a level and the Dungeon Master will answer your favourite tactic with a new
+            monster.
           </p>
           <div id="dm-status" class="forge-status" hidden aria-live="polite">
             <div class="forge-working">
@@ -72,33 +120,6 @@
             <ol id="dm-steps" class="pipeline"></ol>
           </div>
           <div id="dm-result" class="dm-result" hidden aria-live="polite"></div>
-        </section>
-
-        <section id="stats" class="card"></section>
-
-        <section class="card">
-          <h2>Spells</h2>
-          <ol id="spells" class="spells"></ol>
-          <p id="targeting-hint" class="hint"></p>
-        </section>
-
-        <section class="card log-card">
-          <h2>Log</h2>
-          <ul id="log" class="log" aria-live="polite"></ul>
-        </section>
-
-        <section class="card keys">
-          <h2>Controls</h2>
-          <dl>
-            <dt><kbd>WASD</kbd> <kbd>QEZC</kbd> / arrows</dt>
-            <dd>move, walk into enemies to attack</dd>
-            <dt><kbd>.</kbd> / <kbd>Space</kbd></dt>
-            <dd>wait</dd>
-            <dt><kbd>1</kbd>–<kbd>9</kbd></dt>
-            <dd>cast; aim with mouse or keys, <kbd>Tab</kbd> next target</dd>
-            <dt><kbd>F</kbd></dt>
-            <dd>invent a spell at the forge (<kbd>Enter</kbd> to forge, <kbd>Esc</kbd> to leave)</dd>
-          </dl>
         </section>
       </aside>
     </main>
