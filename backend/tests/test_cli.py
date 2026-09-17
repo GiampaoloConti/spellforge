@@ -31,16 +31,17 @@ def test_render_shows_map_entities_and_spells():
     assert "HP 20/20" in screen and "Firebolt" in screen and "goblin at 6,1" in screen
 
 
-def test_scripted_session_plays_to_victory():
+def test_scripted_session_clears_the_level():
     game = small_game()
     commands = iter(["?", "nonsense", "1", "1", "quit"])
     output: list[str] = []
     result = play(game, read=lambda _prompt: next(commands), write=output.append)
-    assert result is GameStatus.WON
+    assert result is GameStatus.PLAYING
     text = "\n".join(output)
     assert (
         "unknown command" in text
         and "The goblin dies!" in text
         and "You cast Firebolt." in text
-        and "You win" in text
+        and "Stairs down have opened" in text
+        and "Depth 1" in text
     )

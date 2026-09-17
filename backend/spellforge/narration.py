@@ -71,6 +71,12 @@ def describe(
             return str(d["text"])
         case EventType.PLUGIN_DISABLED:
             return f"!! The arcane forge rejected '{d['plugin']}': {d['reason']}"
+        case EventType.LEVEL_CLEARED:
+            return "The last monster falls. Stairs down have opened (>)."
+        case EventType.LEVEL_STARTED:
+            return (
+                f"You descend to depth {d['depth']}. You catch your breath and your mana returns."
+            )
         case EventType.GAME_OVER:
-            return "*** You win! ***" if d["result"] == "won" else "*** You died. ***"
+            return f"*** You died on depth {d['depth']}. ***"
     return None

@@ -12,6 +12,7 @@ from spellforge.engine.geometry import Pos, line
 class Tile(StrEnum):
     FLOOR = "."
     WALL = "#"
+    STAIRS = ">"
 
 
 @dataclass
@@ -26,9 +27,9 @@ class GameMap:
 
     @classmethod
     def from_ascii(cls, rows: list[str]) -> tuple[GameMap, dict[str, list[Pos]]]:
-        """Parse an ASCII map. `#` is a wall; every other character is floor.
+        """Parse an ASCII map. `#` is a wall, `>` stairs; every other character is floor.
 
-        Characters other than `#` and `.` are returned as markers (char -> positions in
+        Characters other than `#`, `.` and `>` are returned as markers (char -> positions in
         reading order), so tests can place entities with e.g. `@` and `g`.
         """
         if not rows or any(len(r) != len(rows[0]) for r in rows):
@@ -37,8 +38,8 @@ class GameMap:
         markers: dict[str, list[Pos]] = {}
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
-                if ch == Tile.WALL:
-                    game_map.tiles[y][x] = Tile.WALL
+                if ch in (Tile.WALL, Tile.STAIRS):
+                    game_map.tiles[y][x] = Tile(ch)
                 elif ch != Tile.FLOOR:
                     markers.setdefault(ch, []).append(Pos(x, y))
         return game_map, markers
@@ -52,6 +53,9 @@ class GameMap:
     def is_wall(self, pos: Pos) -> bool:
         """Out-of-bounds tiles count as walls."""
         return not self.in_bounds(pos) or self.tiles[pos.y][pos.x] is Tile.WALL
+
+    def is_stairs(self, pos: Pos) -> bool:
+        return self.in_bounds(pos) and self.tiles[pos.y][pos.x] is Tile.STAIRS
 
     def set(self, pos: Pos, tile: Tile) -> None:
         self.tiles[pos.y][pos.x] = tile

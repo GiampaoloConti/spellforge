@@ -66,23 +66,61 @@ def test_goblin_does_not_see_through_walls(make_game):
     assert goblin.pos.x >= 5  # wandered at most within its side of the wall
 
 
-def test_killing_the_last_enemy_wins(make_game):
-    game = make_game(["#####", "#@g.#", "#####"])
+def test_clearing_a_level_opens_stairs_on_the_farthest_tile(make_game):
+    game = make_game(["#######", "#@g...#", "#.....#", "#######"])
     game.entities[2].hp = 1
     events = game.submit(Move(Pos(1, 0)))
-    assert game.status is GameStatus.WON
-    assert events_of(events, EventType.GAME_OVER) == [{"result": "won"}]
-    assert 2 not in game.entities
-    with pytest.raises(InvalidAction, match="over"):
-        game.submit(Wait())
+    # (5, 1) and (5, 2) are equally far in king moves; ties go to the topmost tile.
+    assert events_of(events, EventType.LEVEL_CLEARED) == [{"depth": 1, "stairs": [5, 1]}]
+    assert game.stairs == Pos(5, 1) and game.map.to_ascii()[1] == "#....>#"
+    assert game.status is GameStatus.PLAYING
 
 
-def test_player_death_loses(make_game):
+def test_stepping_on_stairs_descends_to_a_harder_level(make_game):
+    game = make_game(["#####", "#@g>#", "#####"])
+    game.entities[2].hp = 1
+    game.submit(Move(Pos(1, 0)))  # kill the goblin; stairs open on its side
+    game.player.hp, game.player.mana = 10, 2
+    game.submit(Move(Pos(1, 0)))
+    turn_before = game.turn
+    events = game.submit(Move(Pos(1, 0)))
+    assert events_of(events, EventType.LEVEL_STARTED) == [{"depth": 2}]
+    assert game.depth == 2 and game.turn == turn_before + 1
+    assert game.stairs is None and ">" not in "".join(game.map.to_ascii())
+    assert game.player.hp == 10 + 5 and game.player.mana == game.player.max_mana
+    monsters = [e for e in game.entities.values() if e is not game.player]
+    assert monsters and all(m.kind == "goblin" for m in monsters)
+    assert not game.map.is_wall(game.player.pos)
+    assert not any(e.type is EventType.ATTACKED for e in events)  # monsters wait a round
+
+
+def test_the_stairs_tile_is_not_walkable_before_it_opens(make_game):
+    game = make_game(["#####", "#@..#", "#####"])
+    game.submit(Move(Pos(1, 0)))
+    assert game.depth == 1
+
+
+def test_deeper_levels_have_more_and_varied_monsters():
+    from spellforge.engine import Game
+    from spellforge.engine.game import monsters_per_room
+    from spellforge.plugins import default_registry
+
+    assert monsters_per_room(1) == (1, 2)
+    assert monsters_per_room(9) == (3, 5)
+    table = lambda depth: [("goblin", 3), ("not_a_monster", 5)]  # noqa: E731
+    game = Game.new(5, default_registry(), encounters=table)
+    assert {e.kind for e in game.entities.values()} == {"player", "goblin"}
+
+
+def test_player_death_ends_the_run(make_game):
     game = make_game(["#####", "#@g.#", "#####"])
     game.player.hp = 2
-    game.submit(Wait())
+    events = game.submit(Wait())
     assert game.status is GameStatus.LOST
     assert not game.player.alive
+    assert events_of(events, EventType.GAME_OVER) == [{"result": "lost", "depth": 1}]
+    with pytest.raises(InvalidAction, match="over"):
+        game.submit(Wait())
 
 
 def test_allies_fight_enemies(make_game):

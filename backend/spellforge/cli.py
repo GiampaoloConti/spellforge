@@ -62,8 +62,8 @@ def render(game: Game) -> str:
     p = game.player
     statuses = ", ".join(f"{s} ({i.remaining or 'permanent'})" for s, i in p.statuses.items())
     lines.append(
-        f"Turn {game.turn}   HP {p.hp}/{p.max_hp}   Mana {p.mana}/{p.max_mana}"
-        + (f"   [{statuses}]" if statuses else "")
+        f"Depth {game.depth}   Turn {game.turn}   HP {p.hp}/{p.max_hp}   "
+        f"Mana {p.mana}/{p.max_mana}" + (f"   [{statuses}]" if statuses else "")
     )
     for n, spell in enumerate(game.snapshot()["spells"], start=1):
         state = (

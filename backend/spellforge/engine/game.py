@@ -9,6 +9,9 @@ Turn structure (one round):
 4. Every other entity, in id order: turn start, `act` hook (unless prevented), turn end.
 5. Back to 1.
 
+The dungeon is endless: killing the last enemy on a level opens stairs down, and stepping
+onto them generates a deeper, harder level. The run ends only when the player dies.
+
 Plugin failures never crash the game: any exception inside a hook disables the
 plugin that owns it and emits a `PLUGIN_DISABLED` event.
 """
@@ -17,7 +20,7 @@ from __future__ import annotations
 
 import random
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from enum import StrEnum
 from typing import Any
 
@@ -26,7 +29,7 @@ from spellforge.engine.api import ENEMY_FACTION, PLAYER_FACTION, PluginError, Ta
 from spellforge.engine.context import GameContext
 from spellforge.engine.entity import Entity, StatusInstance
 from spellforge.engine.events import Event, EventType
-from spellforge.engine.gamemap import GameMap, generate_level
+from spellforge.engine.gamemap import GameMap, GeneratedLevel, Tile, generate_level
 from spellforge.engine.geometry import DIRECTIONS, Pos
 from spellforge.engine.plugins import Plugin, Registry
 
@@ -34,6 +37,7 @@ PLAYER_MAX_HP = 20
 PLAYER_ATTACK = 3
 PLAYER_MAX_MANA = 10
 MANA_REGEN_PER_TURN = 1
+DESCEND_HEAL = 5
 
 MAX_OPS_PER_TURN = 2_000
 """Ctx calls allowed during one entity's turn before the running plugin is disabled."""
@@ -45,8 +49,20 @@ MAX_SKIPPED_PLAYER_TURNS = 50
 
 class GameStatus(StrEnum):
     PLAYING = "playing"
-    WON = "won"
     LOST = "lost"
+
+
+EncounterTable = Callable[[int], Sequence[tuple[str, int]]]
+"""Given a depth, the monster ids that may appear there with their relative weights."""
+
+
+def goblins_only(depth: int) -> Sequence[tuple[str, int]]:
+    return [("goblin", 1)]
+
+
+def monsters_per_room(depth: int) -> tuple[int, int]:
+    """(min, max) monsters in each room at this depth."""
+    return 1 + (depth - 1) // 3, min(5, 2 + (depth - 1) // 2)
 
 
 class BudgetExceeded(PluginError):
@@ -54,11 +70,21 @@ class BudgetExceeded(PluginError):
 
 
 class Game:
-    def __init__(self, game_map: GameMap, registry: Registry, seed: int, player_pos: Pos) -> None:
+    def __init__(
+        self,
+        game_map: GameMap,
+        registry: Registry,
+        seed: int,
+        player_pos: Pos,
+        encounters: EncounterTable = goblins_only,
+    ) -> None:
         self.map = game_map
         self.registry = registry
         self.seed = seed
+        self.encounters = encounters
         self.rng = random.Random(seed)
+        self.depth = 1
+        self.stairs: Pos | None = None
         self.turn = 0
         self.status = GameStatus.PLAYING
         self.history: list[Event] = []
@@ -74,6 +100,7 @@ class Game:
         self._hook_depth = 0
         self._active_plugins: list[str] = []
         self._budget_culprit: str | None = None
+        self._descend_pending = False
 
         if self.map.is_wall(player_pos):
             raise ValueError(f"player start {player_pos} is a wall")
@@ -95,18 +122,14 @@ class Game:
         cls,
         seed: int,
         registry: Registry,
-        monster_ids: tuple[str, ...] = ("goblin",),
         spells: tuple[str, ...] = (),
+        encounters: EncounterTable = goblins_only,
     ) -> Game:
-        """A generated dungeon level with monsters in every room but the first."""
+        """A generated dungeon, starting at depth 1, with monsters in every room but the first."""
         rng = random.Random(seed)
         level = generate_level(rng)
-        game = cls(level.map, registry, seed, level.rooms[0].center)
-        for room in level.rooms[1:]:
-            free = room.floor_tiles()
-            for _ in range(rng.randint(1, 2)):
-                pos = free.pop(rng.randrange(len(free)))
-                game.add_monster(rng.choice(monster_ids), pos)
+        game = cls(level.map, registry, seed, level.rooms[0].center, encounters)
+        game._populate(level, rng)
         for spell_id in spells:
             game.learn_spell(spell_id)
         game.start()
@@ -120,6 +143,7 @@ class Game:
         legend: dict[str, str] | None = None,
         seed: int = 0,
         spells: tuple[str, ...] = (),
+        encounters: EncounterTable = goblins_only,
     ) -> Game:
         """Build a game from an ASCII map: `@` is the player, `legend` maps chars to monsters.
 
@@ -128,7 +152,7 @@ class Game:
         game_map, markers = GameMap.from_ascii(rows)
         if len(markers.get("@", [])) != 1:
             raise ValueError("map needs exactly one '@'")
-        game = cls(game_map, registry, seed, markers.pop("@")[0])
+        game = cls(game_map, registry, seed, markers.pop("@")[0], encounters)
         legend = legend or {}
         placements = sorted((pos.y, pos.x, ch) for ch, ps in markers.items() for pos in ps)
         for y, x, ch in placements:
@@ -197,7 +221,10 @@ class Game:
             self._ops = 0
             perform()
             self._end_turn(self.player)
-            self._run_other_entities()
+            if self._descend_pending and self.status is GameStatus.PLAYING:
+                self._descend()
+            else:
+                self._run_other_entities()
             self._begin_player_turn()
 
         return self._collect(run_round)
@@ -213,7 +240,12 @@ class Game:
             return lambda: self.melee(self.player, occupant)
         if self.map.is_wall(dest):
             raise InvalidAction("a wall blocks the way")
-        return lambda: self.move_entity(self.player, dest, "step")
+
+        def step() -> None:
+            self.move_entity(self.player, dest, "step")
+            self._descend_pending = self.map.is_stairs(dest)
+
+        return step
 
     def _prepare_cast(self, action: Cast) -> Callable[[], None]:
         spell = self.registry.spells.get(action.spell_id)
@@ -433,8 +465,61 @@ class Game:
             return
         if entity is self.player:
             self._end_game(GameStatus.LOST)
-        elif not any(e.alive and e.faction == ENEMY_FACTION for e in self.entities.values()):
-            self._end_game(GameStatus.WON)
+        elif self.stairs is None and not any(
+            e.alive and e.faction == ENEMY_FACTION for e in self.entities.values()
+        ):
+            self._open_stairs()
+
+    # ------------------------------------------------------------- levels
+
+    def _populate(self, level: GeneratedLevel, rng: random.Random) -> None:
+        table = [
+            (monster_id, weight)
+            for monster_id, weight in self.encounters(self.depth)
+            if monster_id in self.registry.monsters and weight > 0
+        ]
+        if not table:
+            return
+        ids = [monster_id for monster_id, _ in table]
+        weights = [weight for _, weight in table]
+        low, high = monsters_per_room(self.depth)
+        for room in level.rooms[1:]:
+            free = room.floor_tiles()
+            for _ in range(min(len(free), rng.randint(low, high))):
+                pos = free.pop(rng.randrange(len(free)))
+                self.add_monster(rng.choices(ids, weights)[0], pos)
+
+    def _open_stairs(self) -> None:
+        """Put stairs down on the reachable floor tile farthest from the player."""
+        start = self.player.pos
+        distance = {start: 0}
+        queue = deque([start])
+        while queue:
+            current = queue.popleft()
+            for nxt in current.neighbors():
+                if nxt not in distance and not self.map.is_wall(nxt):
+                    distance[nxt] = distance[current] + 1
+                    queue.append(nxt)
+        stairs = max(distance, key=lambda p: (distance[p], -p.y, -p.x))
+        self.map.set(stairs, Tile.STAIRS)
+        self.stairs = stairs
+        self.emit(EventType.LEVEL_CLEARED, depth=self.depth, stairs=[stairs.x, stairs.y])
+
+    def _descend(self) -> None:
+        self._descend_pending = False
+        self.depth += 1
+        rng = random.Random(self.seed * 7919 + self.depth)
+        level = generate_level(rng)
+        for entity in [e for e in self.entities.values() if e is not self.player]:
+            entity.alive = False
+            del self.entities[entity.id]
+        self.map = level.map
+        self.stairs = None
+        self.player.pos = level.rooms[0].center
+        self.player.hp = min(self.player.max_hp, self.player.hp + DESCEND_HEAL)
+        self.player.mana = self.player.max_mana
+        self._populate(level, rng)
+        self.emit(EventType.LEVEL_STARTED, depth=self.depth)
 
     def apply_status(
         self, target: Entity, status_id: str, duration: int | None, source: int | None
@@ -524,7 +609,7 @@ class Game:
 
     def _end_game(self, result: GameStatus) -> None:
         self.status = result
-        self.emit(EventType.GAME_OVER, result=result.value)
+        self.emit(EventType.GAME_OVER, result=result.value, depth=self.depth)
 
     # ------------------------------------------------------------ plugin hooks
 
@@ -599,6 +684,7 @@ class Game:
         return {
             "seed": self.seed,
             "player_id": self.player.id,
+            "depth": self.depth,
             "turn": self.turn,
             "status": self.status.value,
             "map": self.map.to_ascii(),

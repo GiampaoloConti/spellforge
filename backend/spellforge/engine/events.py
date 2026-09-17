@@ -21,7 +21,9 @@ class EventType(StrEnum):
     TURN_SKIPPED = "turn_skipped"  # entity
     MESSAGE = "message"  # text
     PLUGIN_DISABLED = "plugin_disabled"  # plugin, reason
-    GAME_OVER = "game_over"  # result ("won" | "lost")
+    LEVEL_CLEARED = "level_cleared"  # depth, stairs
+    LEVEL_STARTED = "level_started"  # depth
+    GAME_OVER = "game_over"  # result ("lost"), depth
 
 
 @dataclass(frozen=True)

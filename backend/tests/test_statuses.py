@@ -124,4 +124,4 @@ def test_on_death_runs_while_entity_is_still_visible(make_game):
     game.entities[2].hp = 1
     game.submit(Cast("firebolt", Pos(7, 1)))
     assert messages(game).count("goblin alive=False bursts") == 3
-    assert game.status.value == "won"
+    assert game.stairs is not None  # every goblin died in the chain
