@@ -292,6 +292,14 @@ class GameContext(Ctx):
         entity = self._game.spawn(monster_id, pos, faction)
         return entity.id if entity is not None else None
 
+    def despawn(self, entity_id: int) -> bool:
+        self._game.count_op()
+        entity = self._living(entity_id)
+        if entity is None or not entity.summoned:
+            return False  # never natural monsters or the player: only your own summons
+        self._game.kill(entity)
+        return True
+
     def log(self, message: str) -> None:
         self._game.count_op()
         self._game.emit(EventType.MESSAGE, text=_as_str(message, "message")[:200])

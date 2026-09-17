@@ -73,6 +73,7 @@ STARTING_SPELLS = ("firebolt", "frost_nova")
 MAX_FORGED_SPELLS_PER_GAME = 6
 MAX_COUNTER_MONSTERS_PER_GAME = 3
 DUNGEON_MASTER_EVERY = 2
+DUNGEON_MASTER_ATTEMPTS = 2  # the DM runs unattended, so retry once before giving up
 """The Dungeon Master designs a counter-monster when the player clears depths 2, 4, 6, ..."""
 COUNTER_MONSTER_WEIGHT = 5
 """Encounter weight of a Dungeon Master monster: high, so the player actually meets it."""
@@ -505,10 +506,17 @@ class GameSession:
             await self._send(dungeon_master_message("working", message, stage=stage, **details))
 
         try:
-            outcome: MonsterOutcome = await self._dungeon_master.create_counter(
-                profile, first_depth, existing, _taken_ids(game.registry), plugin_id, progress
-            )
-            cost = outcome.usage.cost_usd
+            for attempt in range(DUNGEON_MASTER_ATTEMPTS):
+                if game is not self.game or game.status is not GameStatus.PLAYING:
+                    return  # the run ended while it was thinking
+                outcome: MonsterOutcome = await self._dungeon_master.create_counter(
+                    profile, first_depth, existing, _taken_ids(game.registry), plugin_id, progress
+                )
+                cost = (cost or 0.0) + outcome.usage.cost_usd
+                if outcome.ok and outcome.draft is not None and outcome.spec is not None:
+                    break
+                if attempt + 1 < DUNGEON_MASTER_ATTEMPTS:
+                    await progress("retry", "The Dungeon Master scraps the plan and starts over…")
             if not outcome.ok or outcome.draft is None or outcome.spec is None:
                 await self._send(
                     dungeon_master_message(

@@ -48,6 +48,11 @@ export function storedName(): string | null {
   return read(NAME_KEY);
 }
 
+/** Persist the name locally so a returning browser is recognised (and skips the tutorial). */
+export function rememberName(name: string): void {
+  write(NAME_KEY, name);
+}
+
 export class LeaderboardView {
   private readonly root: HTMLElement;
   private readonly setName: (name: string) => void;

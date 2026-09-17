@@ -35,6 +35,7 @@ class Entity:
     max_mana: int = 0
     statuses: dict[str, StatusInstance] = field(default_factory=dict)
     alive: bool = True
+    summoned: bool = False  # created by a plugin via ctx.spawn; only these can be despawned
 
     def view(self) -> EntityView:
         return EntityView(

@@ -23,6 +23,11 @@
       <span id="run-info" class="run-info"></span>
       <span id="connection" class="connection" data-status="connecting">connecting…</span>
       <div class="topbar-actions">
+        <label class="dev-toggle" title="Show the AI agents at work instead of a loading bar">
+          <input id="dev-toggle" type="checkbox" />
+          <span>Dev</span>
+        </label>
+        <button id="mute" type="button" class="ghost square" aria-label="Mute music" aria-pressed="false">🔊</button>
         <button id="help-button" type="button" class="ghost square" popovertarget="help" aria-label="Controls">?</button>
         <button id="new-game" type="button" class="ghost">New game <kbd>N</kbd></button>
       </div>
@@ -73,6 +78,7 @@
       <section class="play">
         <div id="board-wrap" class="board-wrap">
           <canvas id="board" aria-label="Dungeon map"></canvas>
+          <canvas id="minimap" class="minimap" aria-hidden="true" hidden></canvas>
           <div id="banner" class="banner" aria-live="polite"></div>
           <p id="board-caption" class="board-caption" aria-live="polite"></p>
           <div id="overlay" class="overlay" hidden>
@@ -118,6 +124,7 @@
               <span id="forge-message"></span>
               <span id="forge-timer" class="muted"></span>
             </div>
+            <div class="forge-progress" aria-hidden="true"><span></span></div>
             <ol id="forge-steps" class="pipeline"></ol>
           </div>
           <div id="forge-result" class="forge-result" hidden aria-live="polite"></div>
@@ -136,6 +143,7 @@
               <span class="forge-spinner" aria-hidden="true"></span>
               <span id="dm-message"></span>
             </div>
+            <div class="forge-progress" aria-hidden="true"><span></span></div>
             <ol id="dm-steps" class="pipeline"></ol>
           </div>
           <div id="dm-result" class="dm-result" hidden aria-live="polite"></div>

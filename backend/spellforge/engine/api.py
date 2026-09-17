@@ -315,6 +315,16 @@ class Ctx(ABC):
         """Create a monster on a walkable tile and return its id, or None if blocked.
 
         Use faction "player" to summon an ally. Spawned monsters act from the next round.
+        Remove a summon later with `despawn`, not by dealing it huge damage.
+        """
+
+    @abstractmethod
+    def despawn(self, entity_id: int) -> bool:
+        """Remove a creature you summoned (via `spawn`) from the map, running its `on_death`.
+
+        This is how a temporary minion or transformation ends: e.g. a status whose
+        `on_expire` despawns the creature it summoned. It only works on summoned creatures,
+        never on natural monsters or the player. Returns True if something was removed.
         """
 
     @abstractmethod

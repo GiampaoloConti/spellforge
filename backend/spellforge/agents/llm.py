@@ -7,6 +7,7 @@ and usage/cost accounting.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -27,6 +28,11 @@ DEFAULT_EFFORT = "low"  # measured: ~40% faster than "high" at equal success (do
 MAX_OUTPUT_TOKENS = 32_000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 PROGRESS_INTERVAL = 1.0
+RETRY_ATTEMPTS = 3  # ponytail: fixed count + linear backoff; covers transient API blips
+# Transient statuses to retry. 200 means the stream started, then failed mid-flight (an
+# `error` SSE event: overload/5xx). The SDK's own max_retries only covers the initial
+# request handshake, never a mid-stream failure, so one blip fails the whole forge.
+RETRY_STATUSES = frozenset({200, 500, 502, 503, 529})
 
 # USD per million tokens: (input, output). Cache writes cost 1.25x input, reads 0.1x.
 PRICES = {
@@ -148,24 +154,32 @@ async def structured_call(
 ) -> Reply:
     """Ask Claude for JSON matching `schema`. Raises AgentError with a player-safe message."""
     started = time.perf_counter()
-    try:
-        async with client.beta.messages.stream(
-            model=config.model,
-            max_tokens=max_tokens,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            messages=messages,
-            **request_options(config.model, config.effort, schema),
-        ) as stream:
-            await _report_progress(stream, role, on_progress)
-            response = await stream.get_final_message()
-    except anthropic.AuthenticationError as exc:
-        raise AgentError("the forge's API key was rejected") from exc
-    except anthropic.RateLimitError as exc:
-        raise AgentError("the forge is overloaded (rate limited); try again soon") from exc
-    except anthropic.APIStatusError as exc:
-        raise AgentError(f"the {role}'s API call failed ({exc.status_code})") from exc
-    except anthropic.APIConnectionError as exc:
-        raise AgentError("could not reach the forge's API") from exc
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            async with client.beta.messages.stream(
+                model=config.model,
+                max_tokens=max_tokens,
+                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                messages=messages,
+                **request_options(config.model, config.effort, schema),
+            ) as stream:
+                await _report_progress(stream, role, on_progress)
+                response = await stream.get_final_message()
+            break
+        except anthropic.AuthenticationError as exc:
+            raise AgentError("the forge's API key was rejected") from exc
+        except anthropic.RateLimitError as exc:
+            raise AgentError("the forge is overloaded (rate limited); try again soon") from exc
+        except anthropic.APIConnectionError as exc:
+            if attempt + 1 < RETRY_ATTEMPTS:
+                await asyncio.sleep(attempt + 1)
+                continue
+            raise AgentError("could not reach the forge's API") from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code in RETRY_STATUSES and attempt + 1 < RETRY_ATTEMPTS:
+                await asyncio.sleep(attempt + 1)
+                continue
+            raise AgentError(f"the {role}'s API call failed ({exc.status_code})") from exc
 
     if response.stop_reason == "refusal":
         raise AgentError(f"the {role} declined this request")

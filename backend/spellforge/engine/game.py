@@ -624,6 +624,7 @@ class Game:
         ):
             return None
         entity = self.add_monster(monster_id, pos, faction)
+        entity.summoned = True  # a plugin summon: it may be removed later with ctx.despawn
         self.emit(
             EventType.SPAWNED,
             entity=entity.id,

@@ -8,7 +8,11 @@ import { Effects } from "./effects";
 import { DungeonMasterPanel } from "./dungeonMaster";
 import { ForgePanel } from "./forge";
 import { InviteGate } from "./gate";
-import { LeaderboardView, playerId, storedName } from "./leaderboard";
+import { Intro } from "./intro";
+import { LeaderboardView, playerId, rememberName, storedName } from "./leaderboard";
+import { Minimap } from "./minimap";
+import { Soundtrack } from "./sound";
+import { Tutorial } from "./tutorial";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
 import type { ActionPayload, DevCommand, GameState, Point, ServerMessage } from "./protocol";
@@ -31,9 +35,15 @@ const runInfo = $<HTMLElement>("#run-info");
 const stats = $<HTMLElement>("#stats");
 const spells = $<HTMLElement>("#spells");
 const banner = $<HTMLElement>("#banner");
+const minimapCanvas = $<HTMLCanvasElement>("#minimap");
 
 drawBrand();
+setupDevToggle();
+new Soundtrack($<HTMLButtonElement>("#mute"));
 
+const minimap = new Minimap(minimapCanvas);
+const tutorial = new Tutorial();
+const intro = new Intro();
 const renderer = new Renderer(canvas);
 const effects = new Effects();
 const log = new Log($<HTMLElement>("#log"));
@@ -51,6 +61,7 @@ let state: GameState | null = null;
 let targeting: Targeting | null = null;
 let awaitingReply = false; // one action at a time: ignore input until the server answers
 let startingNewGame = false;
+let greeted = false; // the name prompt + tutorial run once, not again on reconnect
 let hadConnection = false;
 let hoverText = "";
 const newSpellIds = new Set<string>(); // forged spells not cast yet, shown with a badge
@@ -82,6 +93,24 @@ function newGame(): void {
   awaitingReply = connection.send({ type: "new_game", seed: seedFromUrl() });
 }
 
+// First connection: ask the name, then show the tutorial to newcomers. A returning browser
+// (a name is already stored) skips the tutorial. Reconnects just start a fresh run.
+async function startFlow(): Promise<void> {
+  if (greeted) {
+    newGame();
+    return;
+  }
+  greeted = true;
+  const firstTimer = !storedName();
+  const name = await intro.ask(storedName());
+  if (name) {
+    rememberName(name);
+    connection.send({ type: "set_name", name });
+  }
+  if (firstTimer) await tutorial.show();
+  newGame();
+}
+
 function sendAction(action: ActionPayload): void {
   if (!state || awaitingReply || state.status !== "playing") return;
   awaitingReply = connection.send({ type: "action", action });
@@ -100,7 +129,7 @@ function handleMessage(message: ServerMessage): void {
     forge.setAvailable(message.forge_available, message.forge_status);
     dungeonMaster.setAvailable(message.dungeon_master);
     connection.send({ type: "identify", player_id: playerId(), name: storedName() });
-    newGame();
+    void startFlow();
     return;
   }
   if (message.type === "leaderboard") {
@@ -399,6 +428,8 @@ function refresh(): void {
   renderSpells(spells, state, targeting?.spell.id ?? null, selectSpell, newSpellIds);
   forge.setShards(shardCount(state));
   updateCaption();
+  minimapCanvas.hidden = false;
+  minimap.draw(state);
 
   overlay.hidden = state.status === "playing";
   if (state.status === "lost") {
@@ -416,6 +447,34 @@ function updateCaption(): void {
     ? `Aiming ${targeting.spell.name}: click or Enter to cast · Tab next target · Esc cancel`
     : hoverText;
   caption.classList.toggle("aiming", targeting !== null);
+}
+
+// Dev mode shows the AI agents working step by step; players see a themed loading bar.
+// The choice is a body attribute (CSS does the hiding) and is remembered per browser.
+const DEV_KEY = "spellforge.dev";
+
+function setupDevToggle(): void {
+  const toggle = $<HTMLInputElement>("#dev-toggle");
+  const stored = (() => {
+    try {
+      return localStorage.getItem(DEV_KEY) === "1";
+    } catch {
+      return false;
+    }
+  })();
+  const apply = (on: boolean): void => {
+    document.body.dataset.mode = on ? "dev" : "player";
+    toggle.checked = on;
+  };
+  apply(stored);
+  toggle.addEventListener("change", () => {
+    try {
+      localStorage.setItem(DEV_KEY, toggle.checked ? "1" : "0");
+    } catch {
+      // storage unavailable: the choice lasts for this page only
+    }
+    apply(toggle.checked);
+  });
 }
 
 /** Draw the pixel-art sigil into the header and use it as the favicon. */
