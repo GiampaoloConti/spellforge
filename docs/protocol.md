@@ -16,6 +16,7 @@ types). Keep them in sync.
 { "type": "action", "action": { "kind": "wait" } }
 { "type": "action", "action": { "kind": "cast", "spell": "firebolt", "target": [12, 5] } }
 { "type": "action", "action": { "kind": "cast", "spell": "frost_nova", "target": null } }
+{ "type": "invent", "idea": "chain lightning that jumps between 3 enemies" }   // 3-300 chars
 ```
 
 Messages are validated strictly: unknown fields, out-of-range values and messages over
@@ -23,7 +24,8 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 
 ## Server → client
 
-Every message gets exactly one reply.
+`new_game` and `action` get exactly one reply (`state` or `error`). The server also pushes
+`welcome` on connect and `forge` updates at any time.
 
 ```jsonc
 // Something happened (new game or a completed round)
@@ -42,12 +44,29 @@ Every message gets exactly one reply.
 - `events` are structured engine events (see `engine/events.py`). The client uses them
   for effects such as hit flashes and floating damage numbers.
 - `log` is the same events rendered as text by `spellforge/narration.py`, shared with
-  the terminal client. Clients must display it as text, never as HTML, because plugins
-  (soon AI-written) can put arbitrary strings in it.
+  the terminal client. Clients must display it as text, never as HTML, because
+  AI-written plugins can put arbitrary strings in it.
 
-## Planned (M3)
+### The forge
 
-The agent pipeline runs *between* turns, so the server will also push unsolicited
-messages, for example `{"type": "forge_progress", ...}` while a spell is being
-written, and a `state` message when it is hot-loaded. The one-reply-per-message rule
-above will then hold only for `new_game` and `action`.
+```jsonc
+// On connect: is the forge usable (API key configured)?
+{ "type": "welcome", "forge_available": true, "forge_status": "ready" }
+
+// After "invent", pushed while the game keeps running:
+{ "type": "forge", "status": "started", "message": "...", "idea": "..." }
+{ "type": "forge", "status": "working", "stage": "writing" | "testing" | "retrying" | "loading",
+  "message": "Testing chain_lightning in the sandbox…" }
+
+// Success: the spell is already in the spellbook; `state` is the updated snapshot.
+{ "type": "forge", "status": "done", "message": "...", "spell": { /* spell entry */ },
+  "notes": "...", "source": "def on_cast(ctx, caster, target): ...", "warnings": [],
+  "attempts": 1, "seconds": 14.7, "input_tokens": 6600, "output_tokens": 1200,
+  "state": { /* snapshot */ } }
+
+// Failure (also used when the forge is busy, offline, or the run has ended).
+{ "type": "forge", "status": "failed", "message": "...", "problems": ["line 3: ..."] }
+```
+
+A forge `done` or `failed` message is not a reply to `action`, so clients must not treat it
+as one (for example, when deciding whether another action may be sent).

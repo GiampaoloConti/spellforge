@@ -86,14 +86,18 @@ choke point (`Game.call_hook`):
 - hook chains (thorns reflecting thorns) stop at a fixed depth and fizzle without disabling
   anything.
 
-## Known limits (addressed by the sandbox in M3)
+## Running untrusted plugins
 
-- `load_plugin` runs code in-process. It is for trusted, hand-written plugins only.
-  Generated code must go through the sandbox, including in tests.
-- The restricted builtins define the *contract*. They are not a security boundary. The
-  sandbox adds AST checks (no imports, no dunder or underscore attribute access, no
-  `eval`/`exec`/`open`), a separate process, and CPU and memory limits.
-- The action budget counts API calls, not CPU. A pure-Python `while True: pass` needs the
-  sandbox's CPU time limit.
-- A plugin that fails halfway through a hook keeps the effects it already applied, with
-  no rollback.
+Generated plugins never run in the game process. They run in the sandbox (see
+[forge.md](forge.md#the-sandbox-sandbox)): a separate process per plugin, with `ctx` as an
+RPC proxy. Because only plain data crosses the API, the same plugin behaves identically in
+process and in the sandbox. A test replays a game both ways and compares the histories.
+
+Remaining limits:
+
+- `load_plugin` runs code in-process. It is only for trusted, hand-written plugins (the
+  built-ins and test fixtures).
+- The restricted builtins define the *contract*; the security boundary is the sandbox
+  process with its validator, timeouts and memory cap.
+- A plugin that fails halfway through a hook keeps the effects it already applied, with no
+  rollback.

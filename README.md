@@ -36,17 +36,24 @@ pip install -e ".[dev]"
 cd ../frontend
 npm install && npm run build
 
-# 3. Play at http://127.0.0.1:8000
+# 3. Enable the forge: put your Anthropic API key in .env at the repo root
+#    ANTHROPIC_API_KEY=sk-ant-...
+
+# 4. Play at http://127.0.0.1:8000
 cd ../backend
 python -m spellforge.server
 ```
+
+Press <kbd>F</kbd>, describe a spell, press <kbd>Enter</kbd>, and keep playing while the forge
+writes it. Without an API key the game still works; the forge just stays offline.
 
 For frontend development, run `python -m spellforge.server` and `npm run dev` side by side,
 then open http://localhost:5173. There is also a terminal version: `python -m spellforge`.
 
 Tests: `pytest` in `backend/`, `npm test` in `frontend/`.
 
-Design notes: [plugin API](docs/plugin-api.md) (what agents write against) and
+Design notes: [the forge: agent, sandbox and verification](docs/forge.md),
+[plugin API](docs/plugin-api.md) (what agents write against) and
 [client/server protocol](docs/protocol.md).
 
 ## Stack
@@ -57,6 +64,6 @@ Python (engine, agents, sandbox, FastAPI websocket server) · TypeScript (canvas
 
 - [x] M1: Deterministic grid engine plus plugin API
 - [x] M2: Browser client
-- [ ] M3: Single agent writes plugins at runtime
+- [x] M3: Single agent writes plugins at runtime
 - [ ] M4: Agent team (designer, balancer, coder, tester) plus a Dungeon Master that counters your play style
 - [ ] M5: Evals (single agent vs. team) and demo
