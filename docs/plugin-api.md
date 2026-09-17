@@ -1,8 +1,8 @@
 # Plugin API design
 
 Everything creative in Spellforge (spells, status effects, monsters) is a **plugin**: a
-single Python source file written against a narrow API. Today the plugins are
-hand-written. From M3 on, AI agents write them while the game is running. This note
+single Python source file written against a narrow API. Plugins are
+hand-written or written by AI agents while the game is running (see [forge.md](forge.md)). This note
 explains the shape of that API and why it looks the way it does.
 
 The source of truth is [`backend/spellforge/engine/api.py`](../backend/spellforge/engine/api.py)
@@ -40,9 +40,9 @@ they are valid few-shot examples for the Coder agent.
 
 **1. Plain data crosses the boundary, never live objects.** Hooks receive entity *ids*
 and `Pos` values. Queries return frozen `EntityView` snapshots. A plugin cannot reach
-the engine's state, so it cannot corrupt it. The main payoff comes in M3: generated
-code will run in a separate sandboxed process, and because every argument and return
-value is plain data, `ctx` can become an RPC proxy without changing any plugin.
+the engine's state, so it cannot corrupt it. It also lets generated code run in a
+separate sandboxed process: because every argument and return value is plain data, `ctx`
+became an RPC proxy there without changing a single plugin.
 
 **2. Every change goes through `ctx`, and `ctx` validates everything.** Plugin code is
 treated as untrusted input. Wrong types, NaN damage, unknown status ids and invalid
