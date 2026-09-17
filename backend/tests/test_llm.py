@@ -3,7 +3,6 @@
 import asyncio
 
 import anthropic
-import httpx
 import pytest
 
 from spellforge.agents.llm import AgentConfig, AgentError, structured_call
@@ -70,11 +69,16 @@ class _Client:
         return _Stream(self._outcomes.pop(0))
 
 
+class _StatusError(anthropic.APIStatusError):
+    """An APIStatusError carrying a chosen status_code, built without an httpx.Response."""
+
+    def __init__(self, code: int) -> None:
+        Exception.__init__(self, f"status {code}")
+        self.status_code = code
+
+
 def _status_error(code):
-    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    return anthropic.APIStatusError(
-        "boom", response=httpx.Response(code, request=request), body=None
-    )
+    return _StatusError(code)
 
 
 def _call(client):
