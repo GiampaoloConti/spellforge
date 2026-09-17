@@ -3,10 +3,10 @@ name = "spellforge"
 version = "0.0.1"
 description = "A roguelike whose spells are written at runtime by a team of AI agents."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "httpx2>=2.13"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -28,3 +28,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    # Raised inside starlette's own test client, not our code.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

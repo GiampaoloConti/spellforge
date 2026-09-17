@@ -386,7 +386,14 @@ class Game:
             return 0
         dealt = min(amount, target.hp)
         target.hp -= dealt
-        self.emit(EventType.DAMAGED, target=target.id, amount=dealt, source=source, hp=target.hp)
+        self.emit(
+            EventType.DAMAGED,
+            target=target.id,
+            pos=[target.pos.x, target.pos.y],
+            amount=dealt,
+            source=source,
+            hp=target.hp,
+        )
         if target.hp <= 0:
             self.kill(target)
             return dealt
@@ -403,7 +410,13 @@ class Game:
         restored = min(amount, target.max_hp - target.hp)
         if restored > 0:
             target.hp += restored
-            self.emit(EventType.HEALED, target=target.id, amount=restored, hp=target.hp)
+            self.emit(
+                EventType.HEALED,
+                target=target.id,
+                pos=[target.pos.x, target.pos.y],
+                amount=restored,
+                hp=target.hp,
+            )
         return restored
 
     def kill(self, entity: Entity) -> None:
@@ -411,7 +424,7 @@ class Game:
             return
         entity.alive = False
         entity.hp = 0
-        self.emit(EventType.DIED, entity=entity.id)
+        self.emit(EventType.DIED, entity=entity.id, pos=[entity.pos.x, entity.pos.y])
         for inst in list(entity.statuses.values()):
             self._run_status_hook(entity, inst, "on_death")
         entity.statuses.clear()
@@ -584,6 +597,7 @@ class Game:
         """The full visible state as JSON-ready data (used by clients and determinism tests)."""
         return {
             "seed": self.seed,
+            "player_id": self.player.id,
             "turn": self.turn,
             "status": self.status.value,
             "map": self.map.to_ascii(),

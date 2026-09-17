@@ -10,9 +10,9 @@ from typing import Any
 class EventType(StrEnum):
     MOVED = "moved"  # entity, from, to, how ("step" | "teleport" | "push")
     ATTACKED = "attacked"  # attacker, target
-    DAMAGED = "damaged"  # target, amount, source, hp
-    HEALED = "healed"  # target, amount, hp
-    DIED = "died"  # entity
+    DAMAGED = "damaged"  # target, pos, amount, source, hp
+    HEALED = "healed"  # target, pos, amount, hp
+    DIED = "died"  # entity, pos
     SPAWNED = "spawned"  # entity, kind, pos, faction
     STATUS_APPLIED = "status_applied"  # entity, status, remaining, refreshed
     STATUS_EXPIRED = "status_expired"  # entity, status
