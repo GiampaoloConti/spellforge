@@ -298,6 +298,7 @@ def test_websocket_round_trip(tmp_path):
         "forge": False,
         "forge_mode": None,
         "dungeon_master": False,
+        "access_code": False,
     }
     with client.websocket_connect("/ws") as ws:
         assert ws.receive_json()["type"] == "welcome"

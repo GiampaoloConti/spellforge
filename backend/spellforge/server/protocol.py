@@ -64,6 +64,16 @@ class DevMessage(_Message):
     command: Literal["clear_level", "descend", "give_shard"]
 
 
+class UnlockMessage(_Message):
+    """The invite code, sent first when the server answers a new connection with `locked`."""
+
+    type: Literal["unlock"]
+    code: str = Field(max_length=200)
+
+
+unlock_message = TypeAdapter(UnlockMessage)
+
+
 ClientMessage = Annotated[
     NewGameMessage | ActionMessage | InventMessage | DevMessage, Field(discriminator="type")
 ]
@@ -94,6 +104,12 @@ def state_message(
 def error_message(message: str) -> dict[str, Any]:
     """Something was rejected. The game state is unchanged."""
     return {"type": "error", "message": message}
+
+
+def locked_message(error: str | None = None) -> dict[str, Any]:
+    """This server needs an invite code: reply with an `unlock` message. Nothing else is
+    accepted until then. `error` explains why the previous attempt failed."""
+    return {"type": "locked", "error": error}
 
 
 def welcome_message(

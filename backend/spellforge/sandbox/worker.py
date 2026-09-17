@@ -23,6 +23,7 @@ from typing import Any, NoReturn
 from spellforge.engine.api import Ctx, PluginError
 from spellforge.engine.plugins import Plugin, PluginLoadError, load_plugin
 from spellforge.sandbox.codec import decode, encode
+from spellforge.sandbox.hardening import restrict_worker
 from spellforge.sandbox.validator import validate_source
 
 CTX_METHODS = frozenset(Ctx.__abstractmethods__)
@@ -180,17 +181,8 @@ def fail(message: str) -> NoReturn:
     sys.exit(2)
 
 
-def limit_memory() -> None:
-    """On POSIX, cap the address space. On Windows the host puts us in a Job Object."""
-    try:
-        import resource
-    except ImportError:
-        return
-    resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES))
-
-
 def main() -> None:
-    limit_memory()
+    restrict_worker(MEMORY_LIMIT_BYTES)
     channel = Channel()
     worker = Worker(channel)
     while True:

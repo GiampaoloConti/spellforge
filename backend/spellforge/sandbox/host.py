@@ -9,11 +9,14 @@ Defense in depth, in order:
 2. the restricted plugin namespace (no imports, safe builtins only);
 3. a separate process started in isolated mode with an empty environment (no API keys),
    in a temporary working directory;
-4. a memory cap (Job Object on Windows, RLIMIT_AS on POSIX) and no child processes;
+4. a memory cap and no child processes (Job Object on Windows; rlimits on POSIX, plus no
+   file writes and, where the kernel allows unprivileged namespaces, no network: see
+   `hardening.py`);
 5. per-message timeouts: a hook that stops talking is killed and reported as an error.
 
-Not covered, and needed before a public deployment: filesystem and network isolation.
-The process runs as the same OS user as the server.
+Not covered: reading files the server's OS user can read. The worker runs as the same user,
+so a deployment should keep secrets in the environment (the server process is made
+non-dumpable, so its environment cannot be read through /proc), not in files.
 """
 
 from __future__ import annotations
@@ -55,7 +58,7 @@ class SandboxProcess:
             prefix="spellforge-sandbox-", ignore_cleanup_errors=True
         )
         self.process = subprocess.Popen(
-            [sys.executable, "-I", "-m", "spellforge.sandbox.worker"],
+            [sys.executable, "-I", "-B", "-m", "spellforge.sandbox.worker"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

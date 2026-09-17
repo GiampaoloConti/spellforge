@@ -43,6 +43,7 @@ from spellforge.engine.game import SHARD_EVERY
 from spellforge.narration import Narrator
 from spellforge.plugins import builtin_encounters, default_registry
 from spellforge.sandbox.host import PluginSandbox
+from spellforge.server.limits import Reservation, SpendingCap
 from spellforge.server.protocol import (
     MAX_MESSAGE_BYTES,
     ActionMessage,
@@ -71,6 +72,10 @@ FORGE_OFFLINE = "The forge is offline: add ANTHROPIC_API_KEY to .env and restart
 NEEDS_SHARD = (
     "The Arcane Forge needs an arcane shard. One lies hidden on depths 1, "
     f"{1 + SHARD_EVERY}, {1 + 2 * SHARD_EVERY}, ... Find it and step on it."
+)
+BUDGET_SPENT = (
+    "The forge has used up today's budget of AI credit. It rekindles tomorrow (UTC); "
+    "until then, the dungeon awaits."
 )
 
 Send = Callable[[dict[str, Any]], Awaitable[None]]
@@ -109,9 +114,11 @@ class GameSession:
         registry_factory: Callable[[], Registry] = default_registry,
         rng: random.Random | None = None,
         dev_tools: bool = False,
+        spending: SpendingCap | None = None,
     ) -> None:
         self._send = send
         self._dev_tools = dev_tools
+        self._spending = spending or SpendingCap(None)
         self._forge = forge
         self._dungeon_master = dungeon_master
         self._registry_factory = registry_factory
@@ -283,9 +290,12 @@ class GameSession:
             if self._forged_count(game) >= MAX_FORGED_SPELLS_PER_GAME
             else NEEDS_SHARD
             if game.inventory.get(ARCANE_SHARD, 0) < 1
+            else BUDGET_SPENT
+            if not self._spending.available()
             else None
         )
-        if problem is not None or game is None or self._forge is None:
+        reservation = self._spending.reserve() if problem is None else None
+        if problem is not None or game is None or self._forge is None or reservation is None:
             await self._send(forge_message("failed", problem or "The forge is unavailable."))
             return
 
@@ -309,14 +319,17 @@ class GameSession:
             )
         )
         self._forge_task = asyncio.create_task(
-            self._run_forge(game, request, self._next_plugin_id("forged"))
+            self._run_forge(game, request, self._next_plugin_id("forged"), reservation)
         )
 
     def _forged_count(self, game: Game) -> int:
         return sum(1 for plugin_id in game.registry.plugins if plugin_id.startswith("forged_"))
 
-    async def _run_forge(self, game: Game, request: SpellRequest, plugin_id: str) -> None:
+    async def _run_forge(
+        self, game: Game, request: SpellRequest, plugin_id: str, reservation: Reservation
+    ) -> None:
         assert self._forge is not None
+        cost: float | None = None
 
         async def progress(stage: str, message: str, **details: Any) -> None:
             await self._send(forge_message("working", message, stage=stage, **details))
@@ -336,6 +349,7 @@ class GameSession:
 
         try:
             outcome = await self._forge.forge(request, plugin_id, progress)
+            cost = outcome.cost_usd
             if not outcome.ok or outcome.draft is None:
                 problems = outcome.attempts[-1].problems[:3] if outcome.attempts else []
                 await fail(
@@ -380,6 +394,7 @@ class GameSession:
             logger.exception("forge crashed")
             await fail("The forge broke down unexpectedly.")
         finally:
+            self._spending.settle(reservation, cost)
             if self._forge_task is asyncio.current_task():
                 self._forge_task = None
 
@@ -393,6 +408,9 @@ class GameSession:
             or len(self.counter_monsters) >= MAX_COUNTER_MONSTERS_PER_GAME
         ):
             return
+        reservation = self._spending.reserve()
+        if reservation is None:
+            return  # today's budget is used up: the dungeon just stays as it is
         first_depth = game.depth + 1
         profile = profile_player(game, self._narrator.names)
         existing = [f"{m.name}: {m.description}" for m in game.registry.monsters.values()]
@@ -403,14 +421,21 @@ class GameSession:
         )
         self._dm_task = asyncio.create_task(
             self._run_dungeon_master(
-                game, profile, first_depth, existing, self._next_plugin_id("dm")
+                game, profile, first_depth, existing, self._next_plugin_id("dm"), reservation
             )
         )
 
     async def _run_dungeon_master(
-        self, game: Game, profile: str, first_depth: int, existing: list[str], plugin_id: str
+        self,
+        game: Game,
+        profile: str,
+        first_depth: int,
+        existing: list[str],
+        plugin_id: str,
+        reservation: Reservation,
     ) -> None:
         assert self._dungeon_master is not None
+        cost: float | None = None
 
         async def progress(stage: str, message: str, **details: Any) -> None:
             await self._send(dungeon_master_message("working", message, stage=stage, **details))
@@ -419,6 +444,7 @@ class GameSession:
             outcome: MonsterOutcome = await self._dungeon_master.create_counter(
                 profile, first_depth, existing, _taken_ids(game.registry), plugin_id, progress
             )
+            cost = outcome.usage.cost_usd
             if not outcome.ok or outcome.draft is None or outcome.spec is None:
                 await self._send(
                     dungeon_master_message(
@@ -466,6 +492,7 @@ class GameSession:
             logger.exception("dungeon master crashed")
             await self._send(dungeon_master_message("failed", "The Dungeon Master lost the plot."))
         finally:
+            self._spending.settle(reservation, cost)
             if self._dm_task is asyncio.current_task():
                 self._dm_task = None
 
