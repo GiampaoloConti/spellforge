@@ -62,6 +62,7 @@ export interface GameState {
   player_id: number;
   depth: number; // dungeon level, starting at 1
   turn: number;
+  kills: number; // enemies slain this run
   status: "playing" | "lost";
   map: string[]; // rows of "#" (wall) and "." (floor)
   entities: EntityState[];
@@ -177,6 +178,7 @@ export type ServerMessage =
       sprites: Record<string, SpriteArt>; // only sprites not sent before
     }
   | { type: "error"; message: string }
+  | LeaderboardMessage
   // Sent instead of "welcome" when the server needs an invite code; answer with "unlock".
   | { type: "locked"; error: string | null }
   | {
@@ -216,8 +218,35 @@ export type ActionPayload =
   | { kind: "wait" }
   | { kind: "cast"; spell: string; target: Point | null };
 
+// One player's best run. Other players' ids are never sent; `is_you` marks the viewer.
+export interface LeaderboardEntry {
+  rank: number;
+  name: string | null; // null = not chosen yet
+  is_you: boolean;
+  runs: number;
+  depth: number;
+  kills: number;
+  turns: number;
+  spells: string[]; // names of the spells forged in that run
+  finished_at: string; // ISO date
+}
+
+// Sent when a run ends (with run, recorded, new_best) and after "set_name" (without them).
+export interface LeaderboardMessage {
+  type: "leaderboard";
+  entries: LeaderboardEntry[]; // the top 10
+  you: LeaderboardEntry | null; // the viewer's entry when outside the top 10
+  players: number;
+  name: string | null; // the viewer's name
+  run?: { depth: number; kills: number; turns: number };
+  recorded?: boolean; // false when dev tools were used in the run
+  new_best?: boolean;
+}
+
 export type ClientMessage =
   | { type: "unlock"; code: string }
+  | { type: "identify"; player_id: string; name: string | null } // after "welcome"
+  | { type: "set_name"; name: string } // 1-20 characters
   | { type: "new_game"; seed: number | null }
   | { type: "action"; action: ActionPayload }
   | { type: "invent"; idea: string } // 3-300 characters

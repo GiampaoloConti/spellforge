@@ -5,7 +5,8 @@ server; the browser only sends inputs and draws the state it receives. The forge
 progress messages on the same socket while the player keeps playing.
 
 For a public deployment (see `docs/deploy.md`) the environment can require an invite code,
-cap daily AI spending and cap concurrent players; all three are off by default.
+cap daily AI spending and cap concurrent players; all three are off by default. The
+leaderboard is shared by all connections and saved under SPELLFORGE_DATA_DIR.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from spellforge.agents.dungeon_master import DungeonMaster
 from spellforge.agents.factory import make_dungeon_master, make_spell_forge
 from spellforge.agents.forge import SpellForge
 from spellforge.agents.llm import credentials_available
+from spellforge.server.leaderboard import Leaderboard
 from spellforge.server.limits import MAX_UNLOCK_ATTEMPTS, AccessGate, SessionSlots, SpendingCap
 from spellforge.server.protocol import (
     MAX_MESSAGE_BYTES,
@@ -67,12 +69,14 @@ def create_app(
     gate: AccessGate | None = None,
     spending: SpendingCap | None = None,
     slots: SessionSlots | None = None,
+    leaderboard: Leaderboard | None = None,
     wrong_code_delay: float = WRONG_CODE_DELAY,
 ) -> FastAPI:
     app = FastAPI(title="Spellforge")
     gate = gate or AccessGate.from_env()
     spending = spending or SpendingCap.from_env()
     slots = slots or SessionSlots.from_env()
+    leaderboard = leaderboard or Leaderboard.from_env()
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
@@ -130,6 +134,7 @@ def create_app(
                 dungeon_master=dungeon_master_factory(),
                 dev_tools=os.environ.get("SPELLFORGE_DEV_TOOLS") == "1",
                 spending=spending,
+                leaderboard=leaderboard,
             )
             await session.start()
             while True:

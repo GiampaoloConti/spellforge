@@ -64,6 +64,21 @@ class DevMessage(_Message):
     command: Literal["clear_level", "descend", "give_shard"]
 
 
+class IdentifyMessage(_Message):
+    """Who is playing: a random id the browser keeps, and the leaderboard name if it has one."""
+
+    type: Literal["identify"]
+    player_id: str = Field(pattern=r"^[A-Za-z0-9-]{8,64}$")
+    name: str | None = Field(default=None, max_length=60)
+
+
+class SetNameMessage(_Message):
+    """Choose or change the name shown on the leaderboard."""
+
+    type: Literal["set_name"]
+    name: str = Field(max_length=60)
+
+
 class UnlockMessage(_Message):
     """The invite code, sent first when the server answers a new connection with `locked`."""
 
@@ -75,7 +90,8 @@ unlock_message = TypeAdapter(UnlockMessage)
 
 
 ClientMessage = Annotated[
-    NewGameMessage | ActionMessage | InventMessage | DevMessage, Field(discriminator="type")
+    NewGameMessage | ActionMessage | InventMessage | DevMessage | IdentifyMessage | SetNameMessage,
+    Field(discriminator="type"),
 ]
 client_message = TypeAdapter(ClientMessage)
 
@@ -104,6 +120,15 @@ def state_message(
 def error_message(message: str) -> dict[str, Any]:
     """Something was rejected. The game state is unchanged."""
     return {"type": "error", "message": message}
+
+
+def leaderboard_message(
+    standings: dict[str, Any], name: str | None, **fields: Any
+) -> dict[str, Any]:
+    """The leaderboard as this player sees it: `entries` (top 10), `you` (the player's own
+    entry when outside the top 10), `players`, and the player's `name` (null until chosen).
+    Sent when a run ends (with `run`, `recorded` and `new_best`) and after `set_name`."""
+    return {"type": "leaderboard", **standings, "name": name, **fields}
 
 
 def locked_message(error: str | None = None) -> dict[str, Any]:

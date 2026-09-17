@@ -62,6 +62,27 @@ at `https://your-hf-username-spellforge.hf.space` (also linked from the Space pa
 
 Send friends that URL and the invite code. The browser remembers a working code.
 
+### 5. Keep the leaderboard across restarts
+
+A Space's disk is wiped whenever it restarts or redeploys, so the leaderboard needs
+somewhere lasting to live: a Hugging Face Storage Bucket mounted into the Space. The file is a
+few kilobytes, well within the free storage allowance.
+
+1. Create a bucket at [huggingface.co/new-bucket](https://huggingface.co/new-bucket): name
+   it e.g. `spellforge-data`, **private**.
+2. In the Space's **Settings**, attach the bucket as a volume mounted at `/data`,
+   **read-write**.
+3. In **Settings → Variables and secrets**, add the variable `SPELLFORGE_DATA_DIR` = `/data`.
+
+The Space restarts. After the first death, `leaderboard.json` appears in the bucket. Without
+these steps the leaderboard still works but starts empty after each restart; if the folder
+cannot be written, the Space's *Logs* say so.
+
+Players are recognised by a random id their browser keeps, not by IP address (housemates share
+an IP, phones change theirs). Playing in another browser or a private window counts as a new
+player. Runs are recorded by the server when the player dies, so scores can't be faked from the
+browser.
+
 ## Day to day
 
 - **Change the invite code**: edit the secret on the Space; it restarts with the new code and

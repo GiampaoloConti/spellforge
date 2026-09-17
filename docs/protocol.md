@@ -12,6 +12,8 @@ types). Keep them in sync.
 
 ```jsonc
 { "type": "unlock", "code": "invite-code" }  // only when the server sent "locked"
+{ "type": "identify", "player_id": "3f2a…", "name": "Merlin" }  // after welcome; name may be null
+{ "type": "set_name", "name": "Merlin" }    // 1-20 characters; replies with "leaderboard"
 { "type": "new_game", "seed": 42 }          // seed optional (null = random)
 { "type": "action", "action": { "kind": "move", "dx": 1, "dy": -1 } }   // dx, dy in -1..1
 { "type": "action", "action": { "kind": "wait" } }
@@ -100,6 +102,24 @@ When `SPELLFORGE_ACCESS_CODE` is set, a connection first gets
 
 A forge `done` or `failed` message is not a reply to `action`, so clients must not treat it
 as one (for example, when deciding whether another action may be sent).
+
+### The leaderboard
+
+`player_id` is a random id the browser generates and keeps in localStorage. When the player
+dies, the server records the run (unless dev tools were used in it) and pushes the standings;
+`set_name` gets the same message back without the run fields.
+
+```jsonc
+{ "type": "leaderboard",
+  "entries": [ { "rank": 1, "name": "Merlin", "is_you": true, "runs": 4, "depth": 7,
+                 "kills": 41, "turns": 812, "spells": ["Sheepify"], "finished_at": "…" } ],
+  "you": null,          // the viewer's entry when it is outside the top 10
+  "players": 5, "name": "Merlin",
+  "run": { "depth": 7, "kills": 41, "turns": 812 }, "recorded": true, "new_best": true }
+```
+
+Ranking: deepest level, then most kills, then fewest turns. Each player appears once, with
+their best run. Other players' ids are never sent.
 
 ### The Dungeon Master
 

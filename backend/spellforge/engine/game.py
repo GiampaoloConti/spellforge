@@ -96,6 +96,8 @@ class Game:
         self.depth = 1
         self.stairs: Pos | None = None
         self.turn = 0
+        self.kills = 0
+        """Enemies that died this run, however they died."""
         self.status = GameStatus.PLAYING
         self.history: list[Event] = []
         self.entities: dict[int, Entity] = {}
@@ -495,6 +497,8 @@ class Game:
             return
         entity.alive = False
         entity.hp = 0
+        if entity.faction != self.player.faction:
+            self.kills += 1
         self.emit(EventType.DIED, entity=entity.id, pos=[entity.pos.x, entity.pos.y])
         for inst in list(entity.statuses.values()):
             self._run_status_hook(entity, inst, "on_death")
@@ -756,6 +760,7 @@ class Game:
             "player_id": self.player.id,
             "depth": self.depth,
             "turn": self.turn,
+            "kills": self.kills,
             "status": self.status.value,
             "map": self.map.to_ascii(),
             "entities": [

@@ -8,6 +8,7 @@ import { Effects } from "./effects";
 import { DungeonMasterPanel } from "./dungeonMaster";
 import { ForgePanel } from "./forge";
 import { InviteGate } from "./gate";
+import { LeaderboardView, playerId, storedName } from "./leaderboard";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
 import type { ActionPayload, DevCommand, GameState, Point, ServerMessage } from "./protocol";
@@ -40,6 +41,9 @@ const forge = new ForgePanel($<HTMLElement>("#forge"), (idea) => {
   connection.send({ type: "invent", idea });
 });
 const dungeonMaster = new DungeonMasterPanel($<HTMLElement>("#dm"));
+const leaderboard = new LeaderboardView($<HTMLElement>("#leaderboard"), (name) => {
+  connection.send({ type: "set_name", name });
+});
 
 // ---- UI state ------------------------------------------------------------------
 
@@ -95,7 +99,12 @@ function handleMessage(message: ServerMessage): void {
     gate.unlocked();
     forge.setAvailable(message.forge_available, message.forge_status);
     dungeonMaster.setAvailable(message.dungeon_master);
+    connection.send({ type: "identify", player_id: playerId(), name: storedName() });
     newGame();
+    return;
+  }
+  if (message.type === "leaderboard") {
+    leaderboard.show(message);
     return;
   }
   if (message.type === "forge") {
@@ -109,9 +118,12 @@ function handleMessage(message: ServerMessage): void {
   awaitingReply = false; // replies to our own new_game/action messages
   if (message.type === "error") {
     log.add([`Can't: ${message.message}`], "error");
+    const refusedName = /^can't use that name: (.*)$/.exec(message.message);
+    if (refusedName) leaderboard.nameRefused(refusedName[1]!);
     return;
   }
   if (startingNewGame) {
+    leaderboard.clear();
     log.clear();
     renderer.reset();
     dungeonMaster.reset();
@@ -392,7 +404,8 @@ function refresh(): void {
   if (state.status === "lost") {
     $<HTMLElement>("#overlay-title").textContent = "You died";
     $<HTMLElement>("#overlay-text").textContent =
-      `The dungeon claimed you on depth ${state.depth}, after ${state.turn} turns.`;
+      `The dungeon claimed you on depth ${state.depth}, after ${state.turn} turns ` +
+      `and ${state.kills} ${state.kills === 1 ? "kill" : "kills"}.`;
   }
   requestDraw();
 }

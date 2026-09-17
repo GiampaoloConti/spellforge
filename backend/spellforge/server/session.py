@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -44,6 +45,7 @@ from spellforge.engine.game import SHARD_EVERY
 from spellforge.narration import Narrator
 from spellforge.plugins import builtin_encounters, default_registry
 from spellforge.sandbox.host import PluginSandbox
+from spellforge.server.leaderboard import InvalidName, Leaderboard, Run
 from spellforge.server.limits import Reservation, SpendingCap
 from spellforge.server.protocol import (
     MAX_MESSAGE_BYTES,
@@ -51,13 +53,16 @@ from spellforge.server.protocol import (
     ActionPayload,
     CastAction,
     DevMessage,
+    IdentifyMessage,
     InventMessage,
     MoveAction,
     NewGameMessage,
+    SetNameMessage,
     client_message,
     dungeon_master_message,
     error_message,
     forge_message,
+    leaderboard_message,
     state_message,
     welcome_message,
 )
@@ -118,10 +123,15 @@ class GameSession:
         rng: random.Random | None = None,
         dev_tools: bool = False,
         spending: SpendingCap | None = None,
+        leaderboard: Leaderboard | None = None,
     ) -> None:
         self._send = send
         self._dev_tools = dev_tools
         self._spending = spending or SpendingCap(None)
+        self._leaderboard = leaderboard or Leaderboard(None)
+        self.player_id = uuid.uuid4().hex
+        """The browser's id once it identifies itself; until then, one for this connection."""
+        self._dev_used = False
         self._forge = forge
         self._dungeon_master = dungeon_master
         self._registry_factory = registry_factory
@@ -165,6 +175,10 @@ class GameSession:
             await self._invent(message.idea.strip())
         elif isinstance(message, DevMessage):
             await self._dev(message)
+        elif isinstance(message, IdentifyMessage):
+            self._identify(message)
+        elif isinstance(message, SetNameMessage):
+            await self._set_name(message.name)
 
     async def close(self) -> None:
         """Stop both pipelines and every plugin process. Call when the connection ends."""
@@ -182,6 +196,7 @@ class GameSession:
         self._forge_task = self._dm_task = None
         self._close_sandboxes()
         self.counter_monsters = []
+        self._dev_used = False
         seed = seed if seed is not None else self._rng.randrange(1_000_000)
         self.game = Game.new(
             seed, self._registry_factory(), spells=STARTING_SPELLS, encounters=self.encounters
@@ -226,6 +241,8 @@ class GameSession:
         cleared = any(event.type is EventType.LEVEL_CLEARED for event in events)
         if cleared and game.depth % DUNGEON_MASTER_EVERY == 0:
             await self._summon_dungeon_master(game)
+        if any(event.type is EventType.GAME_OVER for event in events):
+            await self._record_run(game)
 
     async def _dev(self, message: DevMessage) -> None:
         if not self._dev_tools:
@@ -235,6 +252,7 @@ class GameSession:
         if game is None or game.status is not GameStatus.PLAYING:
             await self._send(error_message("no game in progress"))
             return
+        self._dev_used = True  # this run no longer counts for the leaderboard
         start = len(game.history)
         if message.command == "clear_level":
             for enemy in [e for e in game.entities.values() if e.faction != game.player.faction]:
@@ -251,6 +269,47 @@ class GameSession:
         elif message.command == "give_shard":
             game.add_item(ARCANE_SHARD)
             await self._after(game, game.history[start:])
+
+    # ---- leaderboard -----------------------------------------------------------
+
+    def _identify(self, message: IdentifyMessage) -> None:
+        self.player_id = message.player_id
+        if message.name and self._leaderboard.name_of(self.player_id) is None:
+            try:
+                self._leaderboard.rename(self.player_id, message.name)
+            except InvalidName:
+                pass  # the browser remembered something unusable; it can ask again
+
+    async def _record_run(self, game: Game) -> None:
+        run = Run(
+            depth=game.depth,
+            kills=game.kills,
+            turns=game.turn,
+            spells=[
+                game.registry.spells[spell_id].name
+                for spell_id in game.spellbook
+                if game.registry.spells[spell_id].plugin_id.startswith("forged_")
+            ],
+        )
+        recorded = not self._dev_used
+        new_best = recorded and self._leaderboard.record(self.player_id, run)
+        await self._send(
+            leaderboard_message(
+                self._leaderboard.view(self.player_id),
+                self._leaderboard.name_of(self.player_id),
+                run={"depth": run.depth, "kills": run.kills, "turns": run.turns},
+                recorded=recorded,
+                new_best=new_best,
+            )
+        )
+
+    async def _set_name(self, raw_name: str) -> None:
+        try:
+            name = self._leaderboard.rename(self.player_id, raw_name)
+        except InvalidName as exc:
+            await self._send(error_message(f"can't use that name: {exc}"))
+            return
+        await self._send(leaderboard_message(self._leaderboard.view(self.player_id), name))
 
     def _unsent_sprites(self, game: Game) -> dict[str, Any]:
         new_ids = set(game.registry.sprites) - self._sent_sprites

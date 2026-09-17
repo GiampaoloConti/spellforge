@@ -35,6 +35,7 @@ function game(map: string[], entities: EntityState[]): GameState {
     player_id: 1,
     depth: 1,
     turn: 1,
+    kills: 0,
     status: "playing",
     map,
     entities,
