@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -222,7 +223,7 @@ class ClaudeSpellWriter:
             data = json.loads(text or "")
             draft = SpellDraft(
                 spell_id=str(data["spell_id"]),
-                notes=str(data["notes"]),
+                notes=_unescape(str(data["notes"])),
                 source=str(data["plugin_source"]),
             )
         except (ValueError, KeyError, TypeError) as exc:
@@ -237,6 +238,15 @@ class ClaudeSpellWriter:
         draft.output_tokens = response.usage.output_tokens
         draft.seconds = time.perf_counter() - started
         return draft
+
+
+def _unescape(text: str) -> str:
+    """Models occasionally double-escape characters in prose (a literal backslash-u2014).
+
+    Decodes those sequences. Only used for player-facing notes, never for source code, where
+    escapes are meaningful.
+    """
+    return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
 
 
 def forge_credentials_available() -> bool:

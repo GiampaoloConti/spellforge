@@ -48,6 +48,7 @@ export function renderSpells(
   state: GameState,
   selectedId: string | null,
   onSelect: (index: number) => void,
+  newSpellIds: ReadonlySet<string> = new Set(),
 ): void {
   const mana = player(state)?.mana ?? 0;
   list.replaceChildren(
@@ -66,9 +67,11 @@ export function renderSpells(
           : spell.target === "self"
             ? "self"
             : `range ${spell.range}`;
+      const name = el("span", "spell-name", spell.name);
+      if (newSpellIds.has(spell.id)) name.append(el("span", "new-badge", "new"));
       button.append(
         el("kbd", "", String(index + 1)),
-        el("span", "spell-name", spell.name),
+        name,
         el("span", "spell-cost", `${spell.mana_cost} mana`),
         el("span", "spell-meta", status),
       );

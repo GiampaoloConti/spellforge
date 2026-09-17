@@ -7,7 +7,8 @@ export type Command =
   | { type: "confirm" }
   | { type: "cancel" }
   | { type: "next_target" }
-  | { type: "new_game" };
+  | { type: "new_game" }
+  | { type: "focus_forge" };
 
 // `Record<K, V>` is an object type whose keys are K and values are V.
 const MOVE_KEYS: Record<string, [number, number]> = {
@@ -58,6 +59,8 @@ export function keyToCommand(code: string): Command | null {
       return { type: "next_target" };
     case "KeyN":
       return { type: "new_game" };
+    case "KeyF":
+      return { type: "focus_forge" };
     default:
       return null;
   }

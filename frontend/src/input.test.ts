@@ -20,6 +20,7 @@ describe("keyToCommand", () => {
     expect(keyToCommand("Escape")).toEqual({ type: "cancel" });
     expect(keyToCommand("Tab")).toEqual({ type: "next_target" });
     expect(keyToCommand("KeyN")).toEqual({ type: "new_game" });
+    expect(keyToCommand("KeyF")).toEqual({ type: "focus_forge" });
     expect(keyToCommand("KeyX")).toBeNull();
   });
 });

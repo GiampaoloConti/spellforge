@@ -4,6 +4,7 @@
 import "./style.css";
 import { GameConnection, serverUrl, type ConnectionStatus } from "./connection";
 import { Effects } from "./effects";
+import { ForgePanel } from "./forge";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
 import type { ActionPayload, GameState, Point, ServerMessage } from "./protocol";
@@ -30,6 +31,9 @@ const targetingHint = $<HTMLElement>("#targeting-hint");
 const renderer = new Renderer(canvas);
 const effects = new Effects();
 const log = new Log($<HTMLElement>("#log"));
+const forge = new ForgePanel($<HTMLElement>("#forge"), (idea) => {
+  connection.send({ type: "invent", idea });
+});
 
 // ---- UI state ------------------------------------------------------------------
 
@@ -38,6 +42,7 @@ let targeting: Targeting | null = null;
 let awaitingReply = false; // one action at a time: ignore input until the server answers
 let startingNewGame = false;
 let hadConnection = false;
+const newSpellIds = new Set<string>(); // forged spells not cast yet, shown with a badge
 
 const connection = new GameConnection(serverUrl(), {
   onOpen: () => {
@@ -68,8 +73,16 @@ function sendAction(action: ActionPayload): void {
 // ---- server messages ------------------------------------------------------------
 
 function handleMessage(message: ServerMessage): void {
-  awaitingReply = false;
-  // Narrowing: inside this `if`, TypeScript knows `message` is the error variant.
+  // Narrowing: inside each branch, TypeScript knows exactly which variant `message` is.
+  if (message.type === "welcome") {
+    forge.setAvailable(message.forge_available, message.forge_status);
+    return;
+  }
+  if (message.type === "forge") {
+    handleForge(message);
+    return;
+  }
+  awaitingReply = false; // replies to our own new_game/action messages
   if (message.type === "error") {
     log.add([`Can't: ${message.message}`], "error");
     return;
@@ -77,6 +90,7 @@ function handleMessage(message: ServerMessage): void {
   if (startingNewGame) {
     log.clear();
     renderer.reset();
+    newSpellIds.clear();
     startingNewGame = false;
   }
   state = message.state;
@@ -84,6 +98,32 @@ function handleMessage(message: ServerMessage): void {
   log.add(message.log);
   renderer.resize(state, boardWrap);
   refresh();
+}
+
+// `Extract<Union, Shape>` picks the union members matching Shape: here, the forge messages.
+function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
+  switch (message.status) {
+    case "started":
+      forge.started(message.idea);
+      log.add([`The forge begins work on: “${message.idea}”`], "system");
+      break;
+    case "working":
+      forge.progress(message.stage, message.message);
+      break;
+    case "failed":
+      forge.failed(message.message, message.problems);
+      log.add([message.message], "error");
+      break;
+    case "done":
+      forge.done(message);
+      newSpellIds.add(message.spell.id);
+      log.add([`✦ ${message.message}`], "system");
+      if (state && !startingNewGame) {
+        state = message.state;
+        refresh();
+      }
+      break;
+  }
 }
 
 function showConnection(status: ConnectionStatus): void {
@@ -97,6 +137,12 @@ function showConnection(status: ConnectionStatus): void {
 // ---- input -------------------------------------------------------------------------
 
 function handleCommand(command: Command): void {
+  if (command.type === "focus_forge") {
+    targeting = null;
+    forge.focus();
+    refresh();
+    return;
+  }
   if (command.type === "new_game") {
     const midRun = state?.status === "playing" && state.turn > 1;
     if (!midRun || confirm("Abandon this run and start a new game?")) newGame();
@@ -165,6 +211,7 @@ function selectSpell(index: number): void {
   }
   if (spell.target === "self") {
     targeting = null;
+    newSpellIds.delete(spell.id);
     sendAction({ kind: "cast", spell: spell.id, target: null });
     refresh();
     return;
@@ -183,6 +230,7 @@ function castAt(target: Point): void {
   }
   const spell = targeting.spell;
   targeting = null;
+  newSpellIds.delete(spell.id);
   sendAction({ kind: "cast", spell: spell.id, target });
 }
 
@@ -205,6 +253,9 @@ function clampToMap(current: GameState, [x, y]: Point): Point {
 
 window.addEventListener("keydown", (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
+  // Typing in the forge box must not move the wizard.
+  const target = event.target;
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) return;
   const command = keyToCommand(event.code);
   if (!command) return;
   event.preventDefault();
@@ -252,7 +303,7 @@ function refresh(): void {
   if (!state) return;
   runInfo.textContent = `seed ${state.seed}`;
   renderStats(stats, state);
-  renderSpells(spells, state, targeting?.spell.id ?? null, selectSpell);
+  renderSpells(spells, state, targeting?.spell.id ?? null, selectSpell, newSpellIds);
   targetingHint.textContent = targeting
     ? `Aiming ${targeting.spell.name}: click or Enter to cast, Tab for next target, Esc to cancel.`
     : "";

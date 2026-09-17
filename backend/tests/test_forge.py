@@ -148,3 +148,10 @@ def test_prompts_are_stable_and_carry_the_request():
     prompt = request_prompt(REQUEST)
     assert "<idea>\na little lightning spark\n</idea>" in prompt
     assert "statuses: frozen" in prompt
+
+
+def test_double_escaped_characters_in_notes_are_decoded():
+    from spellforge.agents.spell_writer import _unescape
+
+    assert _unescape("then 2 \u2014 up to 3") == "then 2 — up to 3"
+    assert _unescape("plain text") == "plain text"

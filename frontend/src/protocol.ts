@@ -64,9 +64,32 @@ export interface GameEvent {
   [field: string]: unknown;
 }
 
+export type ForgeStage = "writing" | "testing" | "retrying" | "loading";
+
+export interface ForgeDone {
+  type: "forge";
+  status: "done";
+  message: string;
+  spell: SpellState;
+  notes: string;
+  source: string; // the generated plugin code
+  warnings: string[];
+  attempts: number;
+  seconds: number;
+  input_tokens: number;
+  output_tokens: number;
+  state: GameState;
+}
+
 export type ServerMessage =
   | { type: "state"; state: GameState; events: GameEvent[]; log: string[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "welcome"; forge_available: boolean; forge_status: string }
+  // The forge messages all have type "forge"; `status` tells them apart.
+  | { type: "forge"; status: "started"; message: string; idea: string }
+  | { type: "forge"; status: "working"; message: string; stage: ForgeStage }
+  | ForgeDone
+  | { type: "forge"; status: "failed"; message: string; problems?: string[] };
 
 export type ActionPayload =
   | { kind: "move"; dx: number; dy: number }
@@ -75,4 +98,5 @@ export type ActionPayload =
 
 export type ClientMessage =
   | { type: "new_game"; seed: number | null }
-  | { type: "action"; action: ActionPayload };
+  | { type: "action"; action: ActionPayload }
+  | { type: "invent"; idea: string }; // 3-300 characters

@@ -32,6 +32,32 @@
       </section>
 
       <aside class="sidebar">
+        <section id="forge" class="card forge">
+          <h2>Arcane Forge <kbd>F</kbd></h2>
+          <form id="forge-form">
+            <textarea
+              id="forge-idea"
+              rows="3"
+              maxlength="300"
+              placeholder="Describe a spell… e.g. “turn enemies into sheep that explode after 3 turns”"
+            ></textarea>
+            <div class="forge-actions">
+              <span id="forge-count" class="muted">0 / 300</span>
+              <button id="forge-submit" type="submit">Forge spell</button>
+            </div>
+          </form>
+          <p id="forge-offline" class="forge-offline" hidden></p>
+          <div id="forge-status" class="forge-status" hidden aria-live="polite">
+            <div class="forge-working">
+              <span class="forge-spinner" aria-hidden="true"></span>
+              <span id="forge-message"></span>
+              <span id="forge-timer" class="muted"></span>
+            </div>
+            <ol id="forge-steps" class="forge-steps"></ol>
+          </div>
+          <div id="forge-result" class="forge-result" hidden aria-live="polite"></div>
+        </section>
+
         <section id="stats" class="card"></section>
 
         <section class="card">
@@ -54,6 +80,8 @@
             <dd>wait</dd>
             <dt><kbd>1</kbd>–<kbd>9</kbd></dt>
             <dd>cast; aim with mouse or keys, <kbd>Tab</kbd> next target</dd>
+            <dt><kbd>F</kbd></dt>
+            <dd>invent a spell at the forge (<kbd>Enter</kbd> to forge, <kbd>Esc</kbd> to leave)</dd>
           </dl>
         </section>
       </aside>
