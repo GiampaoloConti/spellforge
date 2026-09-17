@@ -14,7 +14,7 @@ import anthropic
 
 from spellforge.agents.llm import AgentConfig, ProgressNote, Usage, validated_call
 from spellforge.agents.prompts import capabilities, game_facts
-from spellforge.agents.specs import MonsterReview, MonsterSpec, SpellReview, SpellSpec
+from spellforge.agents.specs import Change, MonsterReview, MonsterSpec, SpellReview, SpellSpec
 from spellforge.engine.game import PLAYER_MAX_MANA
 
 SPELL_BUDGET = f"""\
@@ -51,6 +51,48 @@ Budget for a monster first appearing at depth D:
 full damage negation, no unavoidable damage above its attack, no instant kills, no \
 unlimited spawning (at most 2 spawns in its lifetime).
 - A counter should punish a habit, not make that habit useless."""
+
+
+def monster_budget(depth: int) -> tuple[int, int]:
+    """(max_hp, attack) limits for a monster first appearing at `depth`."""
+    return min(40, 6 + 4 * depth), min(6, 2 + depth // 2)
+
+
+def enforce_monster_budget(review: MonsterReview, depth: int) -> MonsterReview:
+    """Clamp stats the Balancer let through above budget; an LLM reviewer can be talked round."""
+    hp_limit, attack_limit = monster_budget(depth)
+    spec = review.spec
+    changes = list(review.changes)
+    updates: dict[str, int] = {}
+    if spec.max_hp > hp_limit:
+        updates["max_hp"] = hp_limit
+        changes.append(
+            Change(
+                field="max_hp",
+                before=str(spec.max_hp),
+                after=str(hp_limit),
+                reason=f"budget guard: depth {depth} allows at most {hp_limit} HP",
+            )
+        )
+    if spec.attack > attack_limit:
+        updates["attack"] = attack_limit
+        changes.append(
+            Change(
+                field="attack",
+                before=str(spec.attack),
+                after=str(attack_limit),
+                reason=f"budget guard: depth {depth} allows at most {attack_limit} attack",
+            )
+        )
+    if not updates or review.verdict == "reject":
+        return review
+    return review.model_copy(
+        update={
+            "verdict": "adjust",
+            "changes": changes,
+            "spec": spec.model_copy(update=updates),
+        }
+    )
 
 
 def spell_system_prompt() -> str:
@@ -163,4 +205,4 @@ Monster spec to review. It will first appear at depth {depth}.
         )
         if review.verdict == "approve":
             review = review.model_copy(update={"spec": spec, "changes": []})
-        return review, reply.usage
+        return enforce_monster_budget(review, depth), reply.usage

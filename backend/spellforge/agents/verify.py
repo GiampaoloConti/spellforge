@@ -64,6 +64,8 @@ class Verification:
     spell: SpellDef | None = None
     monster: MonsterDef | None = None
     player_id: int = 1
+    monster_biggest_hit: int = 0
+    """For monster plugins: the most damage the monster dealt in one hit in the arenas."""
     events: list[Event] = field(default_factory=list)
     """Everything that happened in the test arenas, for spec conformance checks."""
 
@@ -263,6 +265,7 @@ def _monster_hunts(plugin: Plugin, result: Verification) -> None:
         events += game.submit(Wait())
     result.events += events
     result.problems += _crashes(events, name)
+    _record_hits(result, events, monster_id)
     taken = PLAYER_MAX_HP - max(0, game.player.hp)
     if taken > MAX_MONSTER_DAMAGE:
         result.problems.append(
@@ -271,6 +274,15 @@ def _monster_hunts(plugin: Plugin, result: Verification) -> None:
         )
     if not any(_is_action_by(event, monster_id) for event in events):
         result.warnings.append(f"test arena ({name}): the monster never did anything")
+
+
+def _record_hits(result: Verification, events: list[Event], monster_id: int) -> None:
+    hits = [
+        e.data["amount"]
+        for e in events
+        if e.type is EventType.DAMAGED and e.data.get("source") == monster_id
+    ]
+    result.monster_biggest_hit = max([result.monster_biggest_hit, *hits])
 
 
 def _is_action_by(event: Event, entity_id: int) -> bool:
@@ -288,6 +300,7 @@ def _monster_is_fought(plugin: Plugin, result: Verification) -> None:
     """The player attacks with spells and melee, to exercise damage and death hooks."""
     name = "the player fights the monster"
     game = _monster_arena(plugin)
+    monster_id = next(e.id for e in game.entities.values() if e.kind == plugin.monsters[0].id)
     events: list[Event] = []
     for _ in range(8):
         if game.status is not GameStatus.PLAYING:
@@ -311,3 +324,4 @@ def _monster_is_fought(plugin: Plugin, result: Verification) -> None:
                 continue
     result.events += events
     result.problems += _crashes(events, name)
+    _record_hits(result, events, monster_id)

@@ -43,6 +43,11 @@ class Tester:
             report.problems.append(f"spec says max_hp {spec.max_hp}, plugin has {monster.max_hp}")
         if monster.attack != spec.attack:
             report.problems.append(f"spec says attack {spec.attack}, plugin has {monster.attack}")
+        if report.monster_biggest_hit > spec.attack:
+            report.problems.append(
+                f"in the test arena the monster dealt {report.monster_biggest_hit} damage in one "
+                f"hit, but its attack is {spec.attack}; no hit may exceed its attack"
+            )
         report.ok = not report.problems
         return report
 

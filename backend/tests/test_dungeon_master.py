@@ -136,3 +136,28 @@ def test_profile_describes_how_the_player_fights():
     assert "Melee attacks: 1" in profile
     assert "5 with spells" in profile and "3 in melee" in profile
     assert "Damage taken from: goblin" in profile
+
+
+def test_budget_guard_clamps_what_the_balancer_let_through():
+    from spellforge.agents.balancer import enforce_monster_budget
+
+    strong = WARDEN.model_copy(update={"max_hp": 35, "attack": 6})
+    review = MonsterReview(
+        verdict="approve", rationale="Looks fine.", exploits_considered=[], changes=[], spec=strong
+    )
+    guarded = enforce_monster_budget(review, depth=2)
+    assert guarded.verdict == "adjust"
+    assert (guarded.spec.max_hp, guarded.spec.attack) == (14, 3)
+    assert [c.field for c in guarded.changes] == ["max_hp", "attack"]
+    assert "budget guard" in guarded.changes[0].reason
+    assert (
+        enforce_monster_budget(review.model_copy(update={"spec": WARDEN}), 2).verdict == "approve"
+    )
+
+
+def test_monster_hitting_harder_than_its_attack_is_sent_back():
+    brutal = GOLEM.replace("ctx.attack(me, target.id)", "ctx.damage(target.id, 7, source=me)")
+    coder = FakeCoder(brutal, GOLEM)
+    outcome, _ = run(DungeonMaster(FakeDMAgent(), FakeMonsterBalancer(), coder, FakeArtist()))
+    assert outcome.ok
+    assert any("dealt 7 damage in one hit" in p for p in outcome.attempts[0].problems)
