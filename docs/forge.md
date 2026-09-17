@@ -1,8 +1,10 @@
 # The forge: from a player's idea to a running spell
 
 The player types an idea into the Arcane Forge. A few seconds later the spell is in their
-spellbook. This note covers what happens in between: the agent, the sandbox and the
-checks between them. M3 uses a single agent; M4 replaces it with a team.
+spellbook. This note covers the sandbox and the checks every generated plugin goes through,
+using the single-agent forge (M3) as the running example. The default forge is now an agent
+team (Designer, Balancer, Coder, Artist, Tester) that builds on the same pieces: see
+[agents.md](agents.md).
 
 ```
  idea ──► Spell Writer (Claude) ──► static checks ──► sandbox load ──► test arenas ──► hot-load

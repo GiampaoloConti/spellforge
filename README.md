@@ -11,16 +11,19 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
 ## How it works
 
 ```
- your idea ──► Designer ──► Balancer ──► Coder ──► Tester ──► hot-loaded into the game
-                 spec      nerfs broken   plugin    sandbox sim
-                           ideas          code      ↺ retries on failure
+                          ┌─► Balancer ── nerfs broken ideas ─┐
+ your idea ─► Designer ───┼─► Coder (starts early) ───────────┼─► Tester ─► hot-loaded into the game
+               spec       └─► Artist (pixel art) ─────────────┘  sandbox sim, ↺ retries
+
+ clear a level ─► Dungeon Master studies how you fight ─► a new monster built to counter you
 ```
 
 - **Deterministic engine, generated content.** A small hand-written Python engine runs the game. Everything creative is a plugin written by agents against a narrow plugin API.
 - **Agents never block the game.** They work between turns, and the game stays playable.
 - **Generated code is sandboxed.** It goes through static AST checks, then runs in an isolated process with resource limits and access to the plugin API only.
 - **Nothing crashes the game.** Plugins that fail are disabled and replaced with safe fallbacks.
-- **Measured, not claimed.** An eval suite compares a single agent against the agent team on success rate, game balance, cost and latency.
+- **The dungeon fights back.** When you clear a level, a Dungeon Master agent reads how you play and designs a monster to counter it, which goes through the same balance, code and test pipeline.
+- **Measured, not claimed.** Benchmarks compare model choices and the single agent against the team on success rate, cost and latency ([docs/agents.md](docs/agents.md)).
 
 ## Try it
 
@@ -53,7 +56,8 @@ then open http://localhost:5173. There is also a terminal version: `python -m sp
 
 Tests: `pytest` in `backend/`, `npm test` in `frontend/`.
 
-Design notes: [the forge: agent, sandbox and verification](docs/forge.md),
+Design notes: [the agent team and the Dungeon Master](docs/agents.md),
+[the forge: sandbox and verification](docs/forge.md),
 [forge model benchmark](docs/evals/forge-models.md),
 [plugin API](docs/plugin-api.md) (what agents write against) and
 [client/server protocol](docs/protocol.md).
@@ -67,5 +71,5 @@ Python (engine, agents, sandbox, FastAPI websocket server) · TypeScript (canvas
 - [x] M1: Deterministic grid engine plus plugin API
 - [x] M2: Browser client
 - [x] M3: Single agent writes plugins at runtime
-- [ ] M4: Agent team (designer, balancer, coder, tester) plus a Dungeon Master that counters your play style
+- [x] M4: Agent team (designer, balancer, coder, artist, tester) plus a Dungeon Master that counters your play style
 - [ ] M5: Evals (single agent vs. team) and demo

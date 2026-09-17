@@ -17,6 +17,7 @@ types). Keep them in sync.
 { "type": "action", "action": { "kind": "cast", "spell": "firebolt", "target": [12, 5] } }
 { "type": "action", "action": { "kind": "cast", "spell": "frost_nova", "target": null } }
 { "type": "invent", "idea": "chain lightning that jumps between 3 enemies" }   // 3-300 chars
+{ "type": "dev", "command": "clear_level" | "descend" }   // only with SPELLFORGE_DEV_TOOLS=1
 ```
 
 Messages are validated strictly: unknown fields, out-of-range values and messages over
@@ -25,7 +26,7 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 ## Server → client
 
 `new_game` and `action` get exactly one reply (`state` or `error`). The server also pushes
-`welcome` on connect and `forge` updates at any time.
+`welcome` on connect, and `forge` and `dungeon_master` updates at any time.
 
 ```jsonc
 // Something happened (new game or a completed round)
@@ -57,18 +58,26 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 ### The forge
 
 ```jsonc
-// On connect: is the forge usable (API key configured)?
-{ "type": "welcome", "forge_available": true, "forge_status": "ready" }
+// On connect: is the forge usable (API key configured), in which mode, and is the DM on?
+{ "type": "welcome", "forge_available": true, "forge_status": "ready",
+  "forge_mode": "team" | "single", "dungeon_master": true }
 
 // After "invent", pushed while the game keeps running:
-{ "type": "forge", "status": "started", "message": "...", "idea": "..." }
-{ "type": "forge", "status": "working", "stage": "writing" | "testing" | "retrying" | "loading",
-  "message": "Testing chain_lightning in the sandbox…" }
+{ "type": "forge", "status": "started", "message": "...", "idea": "...", "mode": "team" }
+{ "type": "forge", "status": "working", "message": "The Balancer adjusted the numbers.",
+  "stage": "designing" | "balancing" | "coding" | "drawing" | "writing" | "testing"
+         | "retrying" | "loading",
+  // optional, mostly from the agent team (agents overlap, so steps report when they finish):
+  "done": true, "detail": "one or two sentences of the agent's output",
+  "verdict": "approve" | "adjust" | "reject",
+  "changes": [{ "field": "cooldown", "before": "3", "after": "4", "reason": "..." }] }
 
 // Success: the spell is already in the spellbook; `state` is the updated snapshot.
 { "type": "forge", "status": "done", "message": "...", "spell": { /* spell entry */ },
   "notes": "...", "source": "def on_cast(ctx, caster, target): ...", "warnings": [],
   "attempts": 1, "seconds": 14.7, "input_tokens": 6600, "output_tokens": 1200,
+  "cost_usd": 0.05, "team": { "design": {...}, "review": {...}, "speculation": "used",
+  "agents": { "coder": { "model": "...", "seconds": 9.6, "tokens": 9000, "cost_usd": 0.02 } } },
   "state": { /* snapshot */ }, "sprites": { /* art the spell introduced */ } }
 
 // Failure (also used when the forge is busy, offline, or the run has ended).
@@ -77,3 +86,19 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 
 A forge `done` or `failed` message is not a reply to `action`, so clients must not treat it
 as one (for example, when deciding whether another action may be sent).
+
+### The Dungeon Master
+
+Same shape as the forge, pushed after a level is cleared:
+
+```jsonc
+{ "type": "dungeon_master", "status": "started", "message": "...", "depth": 2 }
+{ "type": "dungeon_master", "status": "working", "message": "...", "stage": "balancing", "done": true, ... }
+{ "type": "dungeon_master", "status": "done", "message": "...",
+  "monster": { "id": "...", "name": "Patient Stalker", "description": "...", "counters": "...",
+               "weakness": "...", "taunt": "...", "sprite": "dm_3_art", "max_hp": 10,
+               "attack": 3, "first_depth": 2 },
+  "review": { "verdict": "approve", "rationale": "...", "changes": [] },
+  "source": "...", "seconds": 47.0, "cost_usd": 0.06, "sprites": { /* the monster's art */ } }
+{ "type": "dungeon_master", "status": "failed", "message": "..." }
+```
