@@ -22,5 +22,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# Plugin sources get the plugin API injected as globals instead of importing it.
+"spellforge/plugins/*.py" = ["F821"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
