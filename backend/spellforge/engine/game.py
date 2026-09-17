@@ -628,6 +628,7 @@ class Game:
                     "mana_cost": spell.mana_cost,
                     "target": spell.target.value,
                     "range": spell.range,
+                    "requires_line_of_sight": spell.requires_line_of_sight,
                     "cooldown_remaining": self.spell_cooldown(spell.id),
                     "disabled": spell.plugin_id in self.disabled_plugins,
                 }

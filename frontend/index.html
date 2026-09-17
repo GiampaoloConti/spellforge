@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Spellforge</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Spellforge</h1>
+      <span id="connection" class="pill" data-status="connecting">connecting…</span>
+      <span id="run-info" class="muted"></span>
+      <button id="new-game" type="button" class="ghost">New game <kbd>N</kbd></button>
+    </header>
+
+    <main class="layout">
+      <section class="board-panel">
+        <div id="board-wrap" class="board-wrap">
+          <canvas id="board" aria-label="Dungeon map"></canvas>
+          <div id="overlay" class="overlay" hidden>
+            <h2 id="overlay-title"></h2>
+            <p id="overlay-text"></p>
+            <button id="overlay-new" type="button">New game</button>
+          </div>
+        </div>
+        <p id="hover-info" class="hover-info" aria-live="polite"></p>
+      </section>
+
+      <aside class="sidebar">
+        <section id="stats" class="card"></section>
+
+        <section class="card">
+          <h2>Spells</h2>
+          <ol id="spells" class="spells"></ol>
+          <p id="targeting-hint" class="hint"></p>
+        </section>
+
+        <section class="card log-card">
+          <h2>Log</h2>
+          <ul id="log" class="log" aria-live="polite"></ul>
+        </section>
+
+        <section class="card keys">
+          <h2>Controls</h2>
+          <dl>
+            <dt><kbd>WASD</kbd> <kbd>QEZC</kbd> / arrows</dt>
+            <dd>move, walk into enemies to attack</dd>
+            <dt><kbd>.</kbd> / <kbd>Space</kbd></dt>
+            <dd>wait</dd>
+            <dt><kbd>1</kbd>–<kbd>9</kbd></dt>
+            <dd>cast; aim with mouse or keys, <kbd>Tab</kbd> next target</dd>
+          </dl>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

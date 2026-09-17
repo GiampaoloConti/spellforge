@@ -41,6 +41,6 @@ def test_scripted_session_plays_to_victory():
     assert (
         "unknown command" in text
         and "The goblin dies!" in text
-        and "You cast firebolt." in text
+        and "You cast Firebolt." in text
         and "You win" in text
     )

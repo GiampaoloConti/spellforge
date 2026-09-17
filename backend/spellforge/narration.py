@@ -19,17 +19,25 @@ class Narrator:
             if event.type is EventType.SPAWNED:
                 spawned = self.game.entities.get(event.data["entity"])
                 self.names[event.data["entity"]] = spawned.name if spawned else event.data["kind"]
-            text = describe(event, self.names, self.game.player.id)
+            text = describe(event, self.names, self.game.player.id, self._spell_names())
             if text:
                 lines.append(text)
         self._remember()
         return lines
 
+    def _spell_names(self) -> dict[str, str]:
+        return {spell_id: spell.name for spell_id, spell in self.game.registry.spells.items()}
+
     def _remember(self) -> None:
         self.names.update({e.id: e.name for e in self.game.entities.values()})
 
 
-def describe(event: Event, names: dict[int, str], player_id: int) -> str | None:
+def describe(
+    event: Event,
+    names: dict[int, str],
+    player_id: int,
+    spell_names: dict[str, str] | None = None,
+) -> str | None:
     d = event.data
 
     def who(entity_id: int | None, verb: str, plural: str | None = None) -> str:
@@ -58,7 +66,7 @@ def describe(event: Event, names: dict[int, str], player_id: int) -> str | None:
         case EventType.STATUS_EXPIRED | EventType.STATUS_REMOVED:
             return f"{who(d['entity'], 'are', 'is')} no longer {d['status']}."
         case EventType.SPELL_CAST:
-            return f"{who(d['caster'], 'cast')} {d['spell']}."
+            return f"{who(d['caster'], 'cast')} {(spell_names or {}).get(d['spell'], d['spell'])}."
         case EventType.MESSAGE:
             return str(d["text"])
         case EventType.PLUGIN_DISABLED:
