@@ -25,4 +25,43 @@ define_monster(
     max_hp=6,
     attack=2,
     act=act,
+    sprite="goblin",
+)
+
+
+# ---- art ----
+
+define_sprite(
+    id="goblin",
+    palette={
+        "G": "#3c7a2a",
+        "H": "#a06638",
+        "I": "#ffffff",
+        "L": "#94d65c",
+        "g": "#5caa3c",
+        "h": "#7a4a2a",
+        "i": "#c9d4de",
+        "k": "#140d1c",
+        "n": "#8b5a2b",
+        "r": "#ff4b3e",
+        "t": "#f4efe0",
+    },
+    rows=[
+        "................",
+        "................",
+        ".k...kkkkkk...k.",
+        "kLk.kLLLLLGk.kgk",
+        "kgkkLggggggGkkgk",
+        ".kggLGGGGGGGGGk.",
+        "..kkgkrggrkGkkIk",
+        "...kgggggggGkkik",
+        "...kggtkktgGkkik",
+        "...kkgggggGkkkik",
+        "..kgHhhhhhhhgkik",
+        "..kgHhhhhhhhGnnk",
+        "...kkkkkkkkkkkk.",
+        "...kHhhhhhhhk...",
+        "....kGGkkGGk....",
+        "....kkk..kkk....",
+    ],
 )

@@ -93,6 +93,7 @@ class Worker:
                     "name": status.name,
                     "description": status.description,
                     "prevents_action": status.prevents_action,
+                    "appearance": status.appearance,
                     "hooks": hooks,
                 }
             )
@@ -108,10 +109,15 @@ class Worker:
                     "glyph": monster.glyph,
                     "max_hp": monster.max_hp,
                     "attack": monster.attack,
+                    "sprite": monster.sprite,
                     "has_act": monster.act is not None,
                 }
             )
-        return {"spells": spells, "statuses": statuses, "monsters": monsters}
+        sprites = [
+            {"id": sprite.id, "palette": sprite.palette, "rows": list(sprite.rows)}
+            for sprite in plugin.sprites
+        ]
+        return {"spells": spells, "statuses": statuses, "monsters": monsters, "sprites": sprites}
 
     # ---- running hooks ---------------------------------------------------------
 

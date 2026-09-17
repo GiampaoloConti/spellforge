@@ -16,12 +16,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from spellforge.engine.api import (
+    MAX_SPRITE_COLORS,
     SAFE_BUILTINS,
+    SPRITE_SIZE,
     DamagedHook,
     MonsterAct,
     MonsterDef,
     SpellCast,
     SpellDef,
+    SpriteDef,
     StatusDef,
     StatusHook,
     Target,
@@ -42,6 +45,7 @@ class Plugin:
     spells: list[SpellDef] = field(default_factory=list)
     statuses: list[StatusDef] = field(default_factory=list)
     monsters: list[MonsterDef] = field(default_factory=list)
+    sprites: list[SpriteDef] = field(default_factory=list)
 
 
 def _check_id(value: object, what: str) -> str:
@@ -63,6 +67,15 @@ def _check_int(value: object, what: str, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
         raise PluginLoadError(f"{what} must be an integer between {low} and {high}")
     return value
+
+
+HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _check_sprite_ref(value: object, what: str) -> str | None:
+    if value is None:
+        return None
+    return _check_id(value, what)
 
 
 def _check_hook(value: object, what: str, required: bool = False) -> Any:
@@ -133,6 +146,7 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
         on_expire: StatusHook | None = None,
         on_damaged: DamagedHook | None = None,
         on_death: StatusHook | None = None,
+        appearance: str | None = None,
     ) -> None:
         """Declare a status effect that can be put on entities with `ctx.apply_status`.
 
@@ -154,6 +168,10 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
                 holder takes damage and survives. `source` is an entity id or None.
             on_death: runs when the holder dies, before it is removed from the map.
                 `ctx.entity(status.holder)` still works and has `alive == False`.
+            appearance: id of a sprite (see `define_sprite`) to draw the holder with
+                while the status lasts. Use it whenever the effect changes how a creature
+                looks: turned to stone, polymorphed into a sheep, wrapped in vines... The
+                most recently applied status with an appearance wins.
         """
         status = StatusDef(
             id=_check_id(id, "status"),
@@ -165,6 +183,7 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
             on_expire=_check_hook(on_expire, "on_expire"),
             on_damaged=_check_hook(on_damaged, "on_damaged"),
             on_death=_check_hook(on_death, "on_death"),
+            appearance=_check_sprite_ref(appearance, "appearance sprite"),
             plugin_id=plugin.id,
         )
         plugin.statuses.append(status)
@@ -178,6 +197,7 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
         max_hp: int,
         attack: int,
         act: MonsterAct | None = None,
+        sprite: str | None = None,
     ) -> None:
         """Declare a monster that can appear in dungeons or be created with `ctx.spawn`.
 
@@ -190,6 +210,8 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
             attack: melee damage per hit (0-20), used by `ctx.attack`.
             act: `def act(ctx, me)`: runs on each of the monster's turns; `me` is its
                 entity id. Use it to move and attack. If omitted, the monster waits.
+            sprite: id of a sprite (see `define_sprite`) to draw it with. Without one,
+                the glyph is drawn instead.
         """
         if not isinstance(glyph, str) or len(glyph) != 1 or not glyph.isprintable():
             raise PluginLoadError("glyph must be a single printable character")
@@ -201,9 +223,59 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
             max_hp=_check_int(max_hp, "max_hp", 1, 100),
             attack=_check_int(attack, "attack", 0, 20),
             act=_check_hook(act, "act"),
+            sprite=_check_sprite_ref(sprite, "sprite"),
             plugin_id=plugin.id,
         )
         plugin.monsters.append(monster)
+
+    def define_sprite(*, id: str, palette: dict[str, str], rows: list[str]) -> None:
+        """Declare 16x16 pixel art for creatures, used by `define_monster(sprite=...)` and
+        `define_status(appearance=...)`.
+
+        Args:
+            id: unique snake_case id, e.g. "stone_statue".
+            palette: maps single characters to colors, e.g. {"k": "#140d1c", "g": "#5caa3c"}.
+                At most 16 colors. "." is reserved for transparent pixels.
+            rows: exactly 16 strings of exactly 16 characters, top row first. Each
+                character is a palette key or "." (transparent).
+
+        How to draw a good sprite: face right; fill most of the 16x16 box, feet on the
+        bottom rows; give the shape a 1-pixel dark outline ("#140d1c") so it reads on the
+        dark dungeon floor; use 3-6 colors with a lighter highlight on the top-left and a
+        darker shade on the bottom-right.
+        """
+        sprite_id = _check_id(id, "sprite")
+        if not isinstance(palette, dict) or not 1 <= len(palette) <= MAX_SPRITE_COLORS:
+            raise PluginLoadError(f"sprite palette must be a dict of 1-{MAX_SPRITE_COLORS} colors")
+        for key, color in palette.items():
+            if not isinstance(key, str) or len(key) != 1 or key == "." or not key.isprintable():
+                raise PluginLoadError(
+                    f"palette key {key!r} must be one printable character, not '.'"
+                )
+            if not isinstance(color, str) or not HEX_COLOR.match(color):
+                raise PluginLoadError(f"palette color {color!r} must look like '#1a2b3c'")
+        if not isinstance(rows, list | tuple) or len(rows) != SPRITE_SIZE:
+            raise PluginLoadError(f"sprite rows must be a list of {SPRITE_SIZE} strings")
+        for y, row in enumerate(rows):
+            if not isinstance(row, str) or len(row) != SPRITE_SIZE:
+                raise PluginLoadError(
+                    f"sprite row {y} must be a string of {SPRITE_SIZE} characters"
+                )
+            unknown = sorted({ch for ch in row if ch != "." and ch not in palette})
+            if unknown:
+                raise PluginLoadError(
+                    f"sprite row {y} uses colors missing from the palette: {unknown}"
+                )
+        if all(ch == "." for row in rows for ch in row):
+            raise PluginLoadError("sprite is completely transparent")
+        plugin.sprites.append(
+            SpriteDef(
+                id=sprite_id,
+                palette={str(k): str(v).lower() for k, v in palette.items()},
+                rows=tuple(rows),
+                plugin_id=plugin.id,
+            )
+        )
 
     return {
         "__builtins__": dict(SAFE_BUILTINS),
@@ -211,12 +283,20 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
         "define_spell": define_spell,
         "define_status": define_status,
         "define_monster": define_monster,
+        "define_sprite": define_sprite,
         "Pos": Pos,
         "DIRECTIONS": DIRECTIONS,
     }
 
 
-PLUGIN_GLOBALS = ("define_spell", "define_status", "define_monster", "Pos", "DIRECTIONS")
+PLUGIN_GLOBALS = (
+    "define_spell",
+    "define_status",
+    "define_monster",
+    "define_sprite",
+    "Pos",
+    "DIRECTIONS",
+)
 """Names a plugin can use besides `SAFE_BUILTINS`."""
 
 
@@ -233,8 +313,8 @@ def load_plugin(plugin_id: str, source: str) -> Plugin:
         raise
     except Exception as exc:
         raise PluginLoadError(f"error while loading: {type(exc).__name__}: {exc}") from exc
-    if not (plugin.spells or plugin.statuses or plugin.monsters):
-        raise PluginLoadError("plugin defines nothing: call define_spell/status/monster")
+    if not (plugin.spells or plugin.statuses or plugin.monsters or plugin.sprites):
+        raise PluginLoadError("plugin defines nothing: call define_spell/status/monster/sprite")
     return plugin
 
 
@@ -246,6 +326,7 @@ class Registry:
         self.spells: dict[str, SpellDef] = {}
         self.statuses: dict[str, StatusDef] = {}
         self.monsters: dict[str, MonsterDef] = {}
+        self.sprites: dict[str, SpriteDef] = {}
         for plugin in plugins or []:
             self.add(plugin)
 
@@ -257,12 +338,22 @@ class Registry:
             ("spell", self.spells, plugin.spells),
             ("status", self.statuses, plugin.statuses),
             ("monster", self.monsters, plugin.monsters),
+            ("sprite", self.sprites, plugin.sprites),
         ]
         for kind, table, defs in tables:
             ids = [d.id for d in defs]
             clashes = sorted({i for i in ids if i in table or ids.count(i) > 1})
             if clashes:
                 raise PluginLoadError(f"{kind} id(s) already defined: {', '.join(clashes)}")
+        known_sprites = set(self.sprites) | {s.id for s in plugin.sprites}
+        references = [(s.appearance, f"status {s.id!r}") for s in plugin.statuses] + [
+            (m.sprite, f"monster {m.id!r}") for m in plugin.monsters
+        ]
+        for sprite_id, owner in references:
+            if sprite_id is not None and sprite_id not in known_sprites:
+                raise PluginLoadError(
+                    f"{owner} uses sprite {sprite_id!r}, which is not defined: add define_sprite"
+                )
         self.plugins[plugin.id] = plugin
         for _, table, defs in tables:
             for d in defs:

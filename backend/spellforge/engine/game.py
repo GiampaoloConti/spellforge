@@ -679,6 +679,25 @@ class Game:
         run()
         return self.history[start:]
 
+    def appearance(self, entity: Entity) -> str | None:
+        """The sprite id to draw an entity with, or None for the client's default art."""
+        for status_id in reversed(list(entity.statuses)):
+            sprite = self.registry.statuses[status_id].appearance
+            if sprite is not None and sprite in self.registry.sprites:
+                return sprite
+        monster = self.registry.monsters.get(entity.kind)
+        if monster is not None and monster.sprite in self.registry.sprites:
+            return monster.sprite
+        return None
+
+    def sprite_art(self, sprite_ids: set[str] | None = None) -> dict[str, Any]:
+        """Pixel art for sprites defined by plugins (all of them, or just `sprite_ids`)."""
+        return {
+            sprite.id: {"palette": dict(sprite.palette), "rows": list(sprite.rows)}
+            for sprite in self.registry.sprites.values()
+            if sprite_ids is None or sprite.id in sprite_ids
+        }
+
     def snapshot(self) -> dict[str, Any]:
         """The full visible state as JSON-ready data (used by clients and determinism tests)."""
         return {
@@ -701,6 +720,7 @@ class Game:
                     "mana": e.mana,
                     "max_mana": e.max_mana,
                     "attack": e.attack,
+                    "appearance": self.appearance(e),
                     "statuses": [
                         {"id": s.status_id, "remaining": s.remaining} for s in e.statuses.values()
                     ],

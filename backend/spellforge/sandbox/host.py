@@ -167,6 +167,8 @@ class PluginSandbox:
         plugin = Plugin(id=plugin_id, source=source)
         api = make_namespace(plugin)
         try:
+            for sprite in description["sprites"]:
+                api["define_sprite"](**sprite)
             for spell in description["spells"]:
                 api["define_spell"](**spell, on_cast=self._hook(f"spell:{spell['id']}:on_cast"))
             for status in description["statuses"]:

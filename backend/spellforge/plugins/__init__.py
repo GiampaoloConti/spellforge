@@ -13,7 +13,16 @@ from importlib import resources
 
 from spellforge.engine.plugins import Plugin, Registry, load_plugin
 
-BUILTIN_PLUGIN_IDS = ("goblin", "firebolt", "frost_nova")
+BUILTIN_PLUGIN_IDS = (
+    "goblin",
+    "bat",
+    "skeleton_archer",
+    "slime",
+    "orc",
+    "goblin_shaman",
+    "firebolt",
+    "frost_nova",
+)
 
 
 def builtin_source(plugin_id: str) -> str:
@@ -28,3 +37,17 @@ def _load_builtin(plugin_id: str) -> Plugin:
 def default_registry() -> Registry:
     """A fresh registry with all builtin plugins (plugin objects are shared and immutable)."""
     return Registry([_load_builtin(plugin_id) for plugin_id in BUILTIN_PLUGIN_IDS])
+
+
+def builtin_encounters(depth: int) -> list[tuple[str, int]]:
+    """Which monsters appear at a given depth, with relative weights.
+
+    Early levels are goblins and bats; archers and slimes join at depth 2, orcs and shamans
+    at depth 3, and the tougher monsters grow more common the deeper you go.
+    """
+    table = [("goblin", max(2, 8 - depth)), ("bat", max(1, 5 - depth))]
+    if depth >= 2:
+        table += [("skeleton_archer", 1 + depth // 2), ("slime", 2)]
+    if depth >= 3:
+        table += [("orc", depth - 2), ("goblin_shaman", 1 + depth // 4)]
+    return table

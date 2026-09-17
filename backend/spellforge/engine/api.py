@@ -130,6 +130,7 @@ class StatusDef:
     on_expire: StatusHook | None
     on_damaged: DamagedHook | None
     on_death: StatusHook | None
+    appearance: str | None
     plugin_id: str
 
 
@@ -142,6 +143,19 @@ class MonsterDef:
     max_hp: int
     attack: int
     act: MonsterAct | None
+    sprite: str | None
+    plugin_id: str
+
+
+SPRITE_SIZE = 16
+MAX_SPRITE_COLORS = 16
+
+
+@dataclass(frozen=True)
+class SpriteDef:
+    id: str
+    palette: dict[str, str]
+    rows: tuple[str, ...]
     plugin_id: str
 
 

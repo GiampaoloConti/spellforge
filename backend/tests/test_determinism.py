@@ -6,14 +6,14 @@ import random
 import pytest
 
 from spellforge.engine import DIRECTIONS, Cast, EventType, Game, InvalidAction, Move, Wait
-from spellforge.plugins import default_registry
+from spellforge.plugins import builtin_encounters, default_registry
 
 SPELLS = ("firebolt", "frost_nova")
 
 
 def play(seed: int, script_seed: int, rounds: int = 150) -> Game:
     """Play a generated level with a scripted random player that also casts spells."""
-    game = Game.new(seed, default_registry(), spells=SPELLS)
+    game = Game.new(seed, default_registry(), spells=SPELLS, encounters=builtin_encounters)
     script = random.Random(script_seed)
     for _ in range(rounds):
         if game.status.value != "playing":
