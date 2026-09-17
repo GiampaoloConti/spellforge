@@ -76,7 +76,12 @@ def create_app(
                 if connected:
                     await websocket.send_json(message)
 
-        session = GameSession(send, forge=forge_factory(), dungeon_master=dungeon_master_factory())
+        session = GameSession(
+            send,
+            forge=forge_factory(),
+            dungeon_master=dungeon_master_factory(),
+            dev_tools=os.environ.get("SPELLFORGE_DEV_TOOLS") == "1",
+        )
         try:
             await session.start()
             while True:

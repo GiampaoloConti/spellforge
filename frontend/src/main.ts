@@ -5,6 +5,7 @@ import "./style.css";
 import { clearPluginSprites, registerSprites } from "./atlas";
 import { GameConnection, serverUrl, type ConnectionStatus } from "./connection";
 import { Effects } from "./effects";
+import { DungeonMasterPanel } from "./dungeonMaster";
 import { ForgePanel } from "./forge";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
@@ -36,6 +37,7 @@ const log = new Log($<HTMLElement>("#log"));
 const forge = new ForgePanel($<HTMLElement>("#forge"), (idea) => {
   connection.send({ type: "invent", idea });
 });
+const dungeonMaster = new DungeonMasterPanel($<HTMLElement>("#dm"));
 
 // ---- UI state ------------------------------------------------------------------
 
@@ -78,10 +80,15 @@ function handleMessage(message: ServerMessage): void {
   // Narrowing: inside each branch, TypeScript knows exactly which variant `message` is.
   if (message.type === "welcome") {
     forge.setAvailable(message.forge_available, message.forge_status);
+    dungeonMaster.setAvailable(message.dungeon_master);
     return;
   }
   if (message.type === "forge") {
     handleForge(message);
+    return;
+  }
+  if (message.type === "dungeon_master") {
+    handleDungeonMaster(message);
     return;
   }
   awaitingReply = false; // replies to our own new_game/action messages
@@ -92,6 +99,7 @@ function handleMessage(message: ServerMessage): void {
   if (startingNewGame) {
     log.clear();
     renderer.reset();
+    dungeonMaster.reset();
     clearPluginSprites();
     newSpellIds.clear();
     startingNewGame = false;
@@ -116,14 +124,14 @@ function handleMessage(message: ServerMessage): void {
 function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
   switch (message.status) {
     case "started":
-      forge.started(message.idea);
+      forge.started(message.idea, message.mode);
       log.add([`The forge begins work on: “${message.idea}”`], "system");
       break;
     case "working":
-      forge.progress(message.stage, message.message);
+      forge.progress(message, message.message);
       break;
     case "failed":
-      forge.failed(message.message, message.problems);
+      forge.failed(message.message, message.problems, message.team ?? null);
       log.add([message.message], "error");
       break;
     case "done":
@@ -135,6 +143,28 @@ function handleForge(message: Extract<ServerMessage, { type: "forge" }>): void {
         state = message.state;
         refresh();
       }
+      break;
+  }
+}
+
+function handleDungeonMaster(message: Extract<ServerMessage, { type: "dungeon_master" }>): void {
+  switch (message.status) {
+    case "started":
+      dungeonMaster.started();
+      log.add([message.message], "system");
+      break;
+    case "working":
+      dungeonMaster.progress(message, message.message);
+      break;
+    case "failed":
+      dungeonMaster.failed(message.message);
+      log.add([message.message], "error");
+      break;
+    case "done":
+      registerSprites(message.sprites);
+      dungeonMaster.done(message);
+      log.add([message.message, `“${message.monster.taunt}”`], "system");
+      showBanner(`The ${message.monster.name} awaits below`);
       break;
   }
 }
@@ -352,3 +382,15 @@ function drawFrame(now: number): void {
 }
 
 setInterval(requestDraw, BOB_MS); // idle animation
+
+// Development helpers for demos and automated checks: `spellforgeDev("clear_level")` or
+// `spellforgeDev("descend")` in the browser
+// console. The server ignores them unless started with SPELLFORGE_DEV_TOOLS=1.
+declare global {
+  interface Window {
+    spellforgeDev: (command: "clear_level" | "descend") => void;
+  }
+}
+window.spellforgeDev = (command) => {
+  connection.send({ type: "dev", command });
+};

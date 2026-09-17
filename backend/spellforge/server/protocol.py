@@ -57,8 +57,15 @@ class InventMessage(_Message):
     idea: str = Field(min_length=3, max_length=300)
 
 
+class DevMessage(_Message):
+    """Development helpers (demos, automated browser checks). Ignored unless enabled."""
+
+    type: Literal["dev"]
+    command: Literal["clear_level", "descend"]
+
+
 ClientMessage = Annotated[
-    NewGameMessage | ActionMessage | InventMessage, Field(discriminator="type")
+    NewGameMessage | ActionMessage | InventMessage | DevMessage, Field(discriminator="type")
 ]
 client_message = TypeAdapter(ClientMessage)
 

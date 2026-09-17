@@ -54,9 +54,24 @@
               <span id="forge-message"></span>
               <span id="forge-timer" class="muted"></span>
             </div>
-            <ol id="forge-steps" class="forge-steps"></ol>
+            <ol id="forge-steps" class="pipeline"></ol>
           </div>
           <div id="forge-result" class="forge-result" hidden aria-live="polite"></div>
+        </section>
+
+        <section id="dm" class="card dm" hidden>
+          <h2>Dungeon Master</h2>
+          <p id="dm-idle" class="muted dm-idle">
+            Clear a level and the Dungeon Master will answer your favourite tactic with a new monster.
+          </p>
+          <div id="dm-status" class="forge-status" hidden aria-live="polite">
+            <div class="forge-working">
+              <span class="forge-spinner" aria-hidden="true"></span>
+              <span id="dm-message"></span>
+            </div>
+            <ol id="dm-steps" class="pipeline"></ol>
+          </div>
+          <div id="dm-result" class="dm-result" hidden aria-live="polite"></div>
         </section>
 
         <section id="stats" class="card"></section>

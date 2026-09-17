@@ -25,6 +25,7 @@ from spellforge.agents.spell_writer import SpellRequest
 from spellforge.engine import (
     Action,
     Cast,
+    Event,
     EventType,
     Game,
     GameStatus,
@@ -44,6 +45,7 @@ from spellforge.server.protocol import (
     ActionMessage,
     ActionPayload,
     CastAction,
+    DevMessage,
     InventMessage,
     MoveAction,
     NewGameMessage,
@@ -99,8 +101,10 @@ class GameSession:
         dungeon_master: DungeonMaster | None = None,
         registry_factory: Callable[[], Registry] = default_registry,
         rng: random.Random | None = None,
+        dev_tools: bool = False,
     ) -> None:
         self._send = send
+        self._dev_tools = dev_tools
         self._forge = forge
         self._dungeon_master = dungeon_master
         self._registry_factory = registry_factory
@@ -142,6 +146,8 @@ class GameSession:
             await self._act(to_engine_action(message.action))
         elif isinstance(message, InventMessage):
             await self._invent(message.idea.strip())
+        elif isinstance(message, DevMessage):
+            await self._dev(message)
 
     async def close(self) -> None:
         """Stop both pipelines and every plugin process. Call when the connection ends."""
@@ -190,13 +196,38 @@ class GameSession:
         except InvalidAction as exc:
             await self._send(error_message(str(exc)))
             return
+        await self._after(self.game, events)
+
+    async def _after(self, game: Game, events: list[Event]) -> None:
+        """Send what happened, and react to it (a cleared level summons the Dungeon Master)."""
+        assert self._narrator is not None
         await self._send(
-            state_message(
-                self.game, events, self._narrator.narrate(events), self._unsent_sprites(self.game)
-            )
+            state_message(game, events, self._narrator.narrate(events), self._unsent_sprites(game))
         )
         if any(event.type is EventType.LEVEL_CLEARED for event in events):
-            await self._summon_dungeon_master(self.game)
+            await self._summon_dungeon_master(game)
+
+    async def _dev(self, message: DevMessage) -> None:
+        if not self._dev_tools:
+            await self._send(error_message("dev tools are disabled on this server"))
+            return
+        game = self.game
+        if game is None or game.status is not GameStatus.PLAYING:
+            await self._send(error_message("no game in progress"))
+            return
+        start = len(game.history)
+        if message.command == "clear_level":
+            for enemy in [e for e in game.entities.values() if e.faction != game.player.faction]:
+                game.kill(enemy)
+            await self._after(game, game.history[start:])
+        elif message.command == "descend":
+            stairs = game.stairs
+            beside = [p for p in stairs.neighbors() if game.is_walkable(p)] if stairs else []
+            if stairs is None or not beside:
+                await self._send(error_message("the stairs are not open"))
+                return
+            game.player.pos = beside[0]
+            await self._act(Move(beside[0].direction_to(stairs)))
 
     def _unsent_sprites(self, game: Game) -> dict[str, Any]:
         new_ids = set(game.registry.sprites) - self._sent_sprites

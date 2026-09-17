@@ -363,3 +363,19 @@ def test_clearing_a_level_summons_a_counter_monster_for_deeper_levels():
     assert ("warded_golem", 5) in session.encounters(2)
     assert all(monster != "warded_golem" for monster, _ in session.encounters(1))
     run(session.close())
+
+
+def test_dev_tools_are_off_unless_enabled():
+    async def scenario(dev_tools):
+        client = Client(dev_tools=dev_tools)
+        await client.send(new_game())
+        return client, await client.send({"type": "dev", "command": "clear_level"})
+
+    _, reply = run(scenario(False))
+    assert reply == {"type": "error", "message": "dev tools are disabled on this server"}
+    client, reply = run(scenario(True))
+    assert reply["type"] == "state"
+    assert any(event["type"] == "level_cleared" for event in reply["events"])
+    assert client.session.game.stairs is not None
+    reply = run(client.send({"type": "dev", "command": "descend"}))
+    assert reply["state"]["depth"] == 2

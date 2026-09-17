@@ -1,14 +1,9 @@
-// The Arcane Forge panel: the player describes a spell, then watches the agent work.
+// The Arcane Forge panel: the player describes a spell, then watches the agents work.
 //
 // All text from the server (notes, problems, generated code) goes in with textContent.
 
-import type { ForgeDone, ForgeStage } from "./protocol";
-
-const STEPS: { stage: ForgeStage; label: string }[] = [
-  { stage: "writing", label: "Designing and writing the spell" },
-  { stage: "testing", label: "Testing it in the sandbox" },
-  { stage: "loading", label: "Binding it to your spellbook" },
-];
+import { changeList, PipelineView, SINGLE_STEPS, TEAM_STEPS } from "./pipeline";
+import type { ForgeDone, StageDetails, TeamReport } from "./protocol";
 
 function $<T extends HTMLElement>(root: ParentNode, selector: string): T {
   const node = root.querySelector<T>(selector);
@@ -25,8 +20,8 @@ export class ForgePanel {
   private readonly status: HTMLElement;
   private readonly message: HTMLElement;
   private readonly timer: HTMLElement;
-  private readonly steps: HTMLElement;
   private readonly result: HTMLElement;
+  private readonly pipeline: PipelineView;
   private available = false;
   private working = false;
   private startedAt = 0;
@@ -42,8 +37,8 @@ export class ForgePanel {
     this.status = $(root, "#forge-status");
     this.message = $(root, "#forge-message");
     this.timer = $(root, "#forge-timer");
-    this.steps = $(root, "#forge-steps");
     this.result = $(root, "#forge-result");
+    this.pipeline = new PipelineView($(root, "#forge-steps"));
 
     this.form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -73,45 +68,51 @@ export class ForgePanel {
     this.updateControls();
   }
 
-  started(idea: string): void {
+  started(idea: string, mode: "team" | "single"): void {
     this.working = true;
     this.startedAt = performance.now();
     this.idea.value = idea;
     this.result.hidden = true;
     this.status.hidden = false;
     this.message.textContent = "The arcane forge takes your idea…";
-    this.renderSteps("writing");
+    this.pipeline.reset(mode === "team" ? TEAM_STEPS : SINGLE_STEPS);
     window.clearInterval(this.tick);
     this.tick = window.setInterval(() => this.updateTimer(), 250);
     this.updateTimer();
     this.updateControls();
   }
 
-  progress(stage: ForgeStage, message: string): void {
+  progress(details: StageDetails, message: string): void {
     this.message.textContent = message;
-    this.renderSteps(stage === "retrying" ? "writing" : stage, stage === "retrying");
+    this.pipeline.update(details, message);
   }
 
   done(result: ForgeDone): void {
+    this.pipeline.finish();
     this.finish();
     const tokens = Math.round((result.input_tokens + result.output_tokens) / 100) / 10;
     const attempts = result.attempts === 1 ? "1 attempt" : `${result.attempts} attempts`;
+    const cost = result.cost_usd ? ` · $${result.cost_usd.toFixed(3)}` : "";
     this.showResult("success", `✦ ${result.spell.name}`, [
       el("p", "forge-spell-description", result.spell.description),
+      ...reviewSummary(result.team),
       ...result.warnings.map((warning) => el("p", "forge-warning", `⚠ ${warning}`)),
-      details(result.notes, result.source),
-      el("p", "muted forge-meta", `${attempts} · ${result.seconds}s · ${tokens}k tokens`),
+      details(result.notes, result.source, result.team),
+      el("p", "muted forge-meta", `${attempts} · ${result.seconds}s · ${tokens}k tokens${cost}`),
     ]);
     this.idea.value = "";
     this.updateControls();
   }
 
-  failed(message: string, problems: string[] = []): void {
+  failed(message: string, problems: string[] = [], team: TeamReport | null = null): void {
     const wasWorking = this.working;
     this.finish();
     const list = el("ul", "forge-problems");
     list.append(...problems.map((problem) => el("li", "", problem)));
-    this.showResult("failure", message, problems.length ? [list] : []);
+    this.showResult("failure", message, [
+      ...reviewSummary(team),
+      ...(problems.length ? [list] : []),
+    ]);
     if (!wasWorking) this.result.classList.add("brief");
   }
 
@@ -128,18 +129,6 @@ export class ForgePanel {
     this.result.hidden = false;
   }
 
-  private renderSteps(current: ForgeStage, retrying = false): void {
-    const index = STEPS.findIndex((step) => step.stage === current);
-    this.steps.replaceChildren(
-      ...STEPS.map((step, i) => {
-        const state = i < index ? "done" : i === index ? "active" : "pending";
-        const label = retrying && i === index ? `${step.label} (fixing)` : step.label;
-        const item = el("li", `forge-step ${state}`, label);
-        return item;
-      }),
-    );
-  }
-
   private updateTimer(): void {
     const seconds = (performance.now() - this.startedAt) / 1000;
     this.timer.textContent = `${seconds.toFixed(0)}s`;
@@ -154,7 +143,7 @@ export class ForgePanel {
   }
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(
+export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,
   text?: string,
@@ -165,15 +154,52 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** The Balancer's verdict, visible without expanding anything. */
+function reviewSummary(team: TeamReport | null | undefined): HTMLElement[] {
+  const review = team?.review;
+  if (!review) return [];
+  const label = { approve: "approved", adjust: "adjusted", reject: "rejected" }[review.verdict];
+  const line = el("p", "forge-review");
+  line.append(el("span", `verdict ${review.verdict}`, `Balancer ${label}`), document.createTextNode(` ${review.rationale}`));
+  return review.changes.length ? [line, changeList(review.changes)] : [line];
+}
+
 /** Collapsed by default so the spellbook stays in view during play. */
-function details(notes: string, source: string): HTMLElement {
+export function details(notes: string, source: string, team: TeamReport | null = null): HTMLElement {
   const box = el("details", "forge-code");
   const pre = el("pre", "");
   pre.append(el("code", "", source));
-  box.append(
-    el("summary", "", "Writer's notes and generated code"),
-    el("p", "forge-notes", notes),
-    pre,
-  );
+  box.append(el("summary", "", team ? "How the agents built it" : "Writer's notes and generated code"));
+  if (team) box.append(agentTable(team));
+  if (notes) box.append(el("p", "forge-notes", notes));
+  box.append(pre);
   return box;
+}
+
+function agentTable(team: TeamReport): HTMLElement {
+  const table = el("table", "agent-table");
+  const head = el("tr", "");
+  for (const title of ["Agent", "Model", "Time", "Cost"]) head.append(el("th", "", title));
+  table.append(head);
+  for (const [role, cost] of Object.entries(team.agents)) {
+    const row = el("tr", "");
+    row.append(
+      el("td", "", role.replace("_", " ")),
+      el("td", "", cost.model.replace("claude-", "")),
+      el("td", "", `${cost.seconds}s`),
+      el("td", "", `$${cost.cost_usd.toFixed(3)}`),
+    );
+    table.append(row);
+  }
+  const speculation = {
+    off: "",
+    started: "",
+    used: "The Coder's early start paid off: the Balancer kept the numbers.",
+    discarded: "The Coder's early draft was discarded: the Balancer changed the numbers.",
+    failed: "The Coder's early draft failed and was rewritten.",
+  }[team.speculation];
+  const wrap = el("div", "");
+  wrap.append(table);
+  if (speculation) wrap.append(el("p", "muted forge-speculation", speculation));
+  return wrap;
 }
