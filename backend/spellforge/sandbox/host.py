@@ -51,7 +51,9 @@ class SandboxProcess:
     """The worker subprocess plus a reader thread (pipes can't be polled on Windows)."""
 
     def __init__(self) -> None:
-        self._workdir = tempfile.TemporaryDirectory(prefix="spellforge-sandbox-")
+        self._workdir = tempfile.TemporaryDirectory(
+            prefix="spellforge-sandbox-", ignore_cleanup_errors=True
+        )
         self.process = subprocess.Popen(
             [sys.executable, "-I", "-m", "spellforge.sandbox.worker"],
             stdin=subprocess.PIPE,

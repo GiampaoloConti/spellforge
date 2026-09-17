@@ -50,6 +50,8 @@ Commands (press Enter after each line):
 
 def render(game: Game) -> str:
     grid = [list(row) for row in game.map.to_ascii()]
+    for pos in game.items:
+        grid[pos.y][pos.x] = "*"
     for entity in game.entities.values():
         grid[entity.pos.y][entity.pos.x] = entity.glyph
     width = game.map.width
@@ -63,7 +65,8 @@ def render(game: Game) -> str:
     statuses = ", ".join(f"{s} ({i.remaining or 'permanent'})" for s, i in p.statuses.items())
     lines.append(
         f"Depth {game.depth}   Turn {game.turn}   HP {p.hp}/{p.max_hp}   "
-        f"Mana {p.mana}/{p.max_mana}" + (f"   [{statuses}]" if statuses else "")
+        f"Mana {p.mana}/{p.max_mana}   Shards {game.inventory.get('arcane_shard', 0)}"
+        + (f"   [{statuses}]" if statuses else "")
     )
     for n, spell in enumerate(game.snapshot()["spells"], start=1):
         state = (

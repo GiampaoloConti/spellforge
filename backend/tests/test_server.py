@@ -8,8 +8,9 @@ from test_forge import GOOD, ScriptedWriter
 
 from spellforge.agents.forge import SingleAgentForge
 from spellforge.agents.spell_writer import Attempt, SpellDraft, SpellRequest
+from spellforge.engine import ARCANE_SHARD
 from spellforge.server.app import create_app
-from spellforge.server.session import FORGE_OFFLINE, GameSession
+from spellforge.server.session import FORGE_OFFLINE, NEEDS_SHARD, GameSession
 
 
 class Client:
@@ -127,7 +128,9 @@ def test_bad_messages_are_rejected(raw, fragment):
 
 
 async def forge(client: Client, idea: str = "a little spark") -> list[dict]:
-    """Ask for a spell and wait until the forge finishes; return the forge messages."""
+    """Give the player a shard, ask for a spell and wait until the forge finishes; return the
+    forge messages."""
+    client.session.game.add_item(ARCANE_SHARD)
     await client.send({"type": "invent", "idea": idea})
     task = client.session._forge_task
     if task is not None:
@@ -188,6 +191,36 @@ def test_failed_forge_reports_problems():
     assert any("imports are not allowed" in p for p in done["problems"])
 
 
+def test_the_forge_needs_a_shard_and_spends_it():
+    async def scenario():
+        client = Client(forge=SingleAgentForge(ScriptedWriter(GOOD)))
+        await client.send(new_game())
+        refused = await client.send({"type": "invent", "idea": "a spark"})
+        messages = await forge(client)
+        await client.session.close()
+        return client, refused, messages
+
+    client, refused, messages = run(scenario())
+    assert refused == {"type": "forge", "status": "failed", "message": NEEDS_SHARD}
+    started = messages[1]
+    assert started["status"] == "started" and started["state"]["inventory"] == {ARCANE_SHARD: 0}
+    assert messages[-1]["status"] == "done"
+    assert client.session.game.inventory == {ARCANE_SHARD: 0}
+
+
+def test_a_failed_forge_gives_the_shard_back():
+    async def scenario():
+        client = Client(forge=SingleAgentForge(ScriptedWriter("import os", "import os")))
+        await client.send(new_game())
+        messages = await forge(client)
+        return client, messages[-1]
+
+    client, failed = run(scenario())
+    assert failed["status"] == "failed" and failed["message"].endswith("shard is returned.")
+    assert failed["state"]["inventory"] == {ARCANE_SHARD: 1}
+    assert client.session.game.inventory == {ARCANE_SHARD: 1}
+
+
 class GatedWriter:
     """A writer that waits until the test releases it, to simulate a slow LLM call."""
 
@@ -206,6 +239,7 @@ def test_game_stays_playable_while_the_forge_works():
         writer = GatedWriter()
         client = Client(forge=SingleAgentForge(writer))
         await client.send(new_game())
+        client.session.game.add_item(ARCANE_SHARD, 2)
         await client.send({"type": "invent", "idea": "a spark"})
         busy = await client.send({"type": "invent", "idea": "another"})
         played = await client.send(WAIT)
@@ -225,6 +259,7 @@ def test_new_game_cancels_the_forge():
         writer = GatedWriter()
         client = Client(forge=SingleAgentForge(writer))
         await client.send(new_game())
+        client.session.game.add_item(ARCANE_SHARD, 2)
         await client.send({"type": "invent", "idea": "a spark"})
         await asyncio.sleep(0)
         reply = await client.send(new_game(43))
@@ -243,7 +278,9 @@ def test_new_game_cancels_the_forge():
 # ---- websocket ----------------------------------------------------------------------
 
 
-def app_client(tmp_path, writer=None) -> TestClient:
+def app_client(tmp_path, writer=None, monkeypatch=None) -> TestClient:
+    if monkeypatch is not None:
+        monkeypatch.setenv("SPELLFORGE_DEV_TOOLS", "1")
     forge = SingleAgentForge(writer) if writer is not None else None
     return TestClient(
         create_app(
@@ -272,12 +309,14 @@ def test_websocket_round_trip(tmp_path):
         assert ws.receive_json()["state"]["turn"] == 2
 
 
-def test_websocket_forge_pushes_progress_then_the_spell(tmp_path):
-    client = app_client(tmp_path, writer=ScriptedWriter(GOOD))
+def test_websocket_forge_pushes_progress_then_the_spell(tmp_path, monkeypatch):
+    client = app_client(tmp_path, writer=ScriptedWriter(GOOD), monkeypatch=monkeypatch)
     with client.websocket_connect("/ws") as ws:
         assert ws.receive_json()["forge_available"] is True
         ws.send_text(json.dumps(new_game(3)))
         ws.receive_json()
+        ws.send_text(json.dumps({"type": "dev", "command": "give_shard"}))
+        assert ws.receive_json()["state"]["inventory"] == {ARCANE_SHARD: 1}
         ws.send_text(json.dumps({"type": "invent", "idea": "a little spark"}))
         statuses = []
         while not statuses or statuses[-1] not in ("done", "failed"):

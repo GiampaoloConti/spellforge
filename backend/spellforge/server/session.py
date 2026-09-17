@@ -1,6 +1,7 @@
 """One player's game, driven by protocol messages, with two agent pipelines beside it.
 
 - The forge turns the player's spell ideas into plugins (the agent team, or one agent).
+  Each spell costs an arcane shard, found every third level; a failed forge gives it back.
 - The Dungeon Master designs counter-monsters when the player clears a level.
 
 No networking here: replies and pushed updates go through the `send` callback, so the
@@ -23,6 +24,7 @@ from spellforge.agents.dungeon_master import DungeonMaster, MonsterOutcome, prof
 from spellforge.agents.forge import SpellForge
 from spellforge.agents.spell_writer import SpellRequest
 from spellforge.engine import (
+    ARCANE_SHARD,
     Action,
     Cast,
     Event,
@@ -37,6 +39,7 @@ from spellforge.engine import (
     Registry,
     Wait,
 )
+from spellforge.engine.game import SHARD_EVERY
 from spellforge.narration import Narrator
 from spellforge.plugins import builtin_encounters, default_registry
 from spellforge.sandbox.host import PluginSandbox
@@ -65,6 +68,10 @@ MAX_COUNTER_MONSTERS_PER_GAME = 3
 COUNTER_MONSTER_WEIGHT = 5
 """Encounter weight of a Dungeon Master monster: high, so the player actually meets it."""
 FORGE_OFFLINE = "The forge is offline: add ANTHROPIC_API_KEY to .env and restart the server."
+NEEDS_SHARD = (
+    "The Arcane Forge needs an arcane shard. One lies hidden on depths 1, "
+    f"{1 + SHARD_EVERY}, {1 + 2 * SHARD_EVERY}, ... Find it and step on it."
+)
 
 Send = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -173,7 +180,8 @@ class GameSession:
         self._sent_sprites.clear()
         log = [
             f"You enter the dungeon (seed {seed}). Clear each level to open the stairs down, "
-            "and see how deep you can go."
+            "and see how deep you can go.",
+            "An arcane shard glimmers somewhere on this level: it powers the Arcane Forge.",
         ]
         await self._send(state_message(self.game, [], log, self._unsent_sprites(self.game)))
 
@@ -228,6 +236,9 @@ class GameSession:
                 return
             game.player.pos = beside[0]
             await self._act(Move(beside[0].direction_to(stairs)))
+        elif message.command == "give_shard":
+            game.add_item(ARCANE_SHARD)
+            await self._after(game, game.history[start:])
 
     def _unsent_sprites(self, game: Game) -> dict[str, Any]:
         new_ids = set(game.registry.sprites) - self._sent_sprites
@@ -270,6 +281,8 @@ class GameSession:
             if self._forge_task is not None
             else f"Your spellbook is full: at most {MAX_FORGED_SPELLS_PER_GAME} forged spells."
             if self._forged_count(game) >= MAX_FORGED_SPELLS_PER_GAME
+            else NEEDS_SHARD
+            if game.inventory.get(ARCANE_SHARD, 0) < 1
             else None
         )
         if problem is not None or game is None or self._forge is None:
@@ -285,9 +298,14 @@ class GameSession:
                 for s in (registry.spells[i] for i in game.spellbook)
             ],
         )
+        game.use_item(ARCANE_SHARD)
         await self._send(
             forge_message(
-                "started", "The arcane forge takes your idea…", idea=idea, mode=self._forge.mode
+                "started",
+                "The arcane forge consumes a shard and takes your idea…",
+                idea=idea,
+                mode=self._forge.mode,
+                state=game.snapshot(),
             )
         )
         self._forge_task = asyncio.create_task(
@@ -303,17 +321,25 @@ class GameSession:
         async def progress(stage: str, message: str, **details: Any) -> None:
             await self._send(forge_message("working", message, stage=stage, **details))
 
+        async def fail(message: str, **details: Any) -> None:
+            if game is not self.game or game.status is not GameStatus.PLAYING:
+                return
+            game.add_item(ARCANE_SHARD)
+            await self._send(
+                forge_message(
+                    "failed",
+                    f"{message} Your arcane shard is returned.",
+                    state=game.snapshot(),
+                    **details,
+                )
+            )
+
         try:
             outcome = await self._forge.forge(request, plugin_id, progress)
             if not outcome.ok or outcome.draft is None:
                 problems = outcome.attempts[-1].problems[:3] if outcome.attempts else []
-                await self._send(
-                    forge_message(
-                        "failed",
-                        f"The forge failed: {outcome.error}.",
-                        problems=problems,
-                        team=outcome.team,
-                    )
+                await fail(
+                    f"The forge failed: {outcome.error}.", problems=problems, team=outcome.team
                 )
                 return
 
@@ -322,7 +348,7 @@ class GameSession:
             try:
                 plugin = await self._hot_load(game, plugin_id, draft.source)
             except PluginLoadError as exc:
-                await self._send(forge_message("failed", f"The spell could not be added: {exc}"))
+                await fail(f"The spell could not be added: {exc}.")
                 return
             if plugin is None:
                 return
@@ -352,7 +378,7 @@ class GameSession:
             raise
         except Exception:
             logger.exception("forge crashed")
-            await self._send(forge_message("failed", "The forge broke down unexpectedly."))
+            await fail("The forge broke down unexpectedly.")
         finally:
             if self._forge_task is asyncio.current_task():
                 self._forge_task = None

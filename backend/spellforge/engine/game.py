@@ -12,6 +12,9 @@ Turn structure (one round):
 The dungeon is endless: killing the last enemy on a level opens stairs down, and stepping
 onto them generates a deeper, harder level. The run ends only when the player dies.
 
+Every third level (depths 1, 4, 7, ...) hides an arcane shard in one of its monster rooms.
+Stepping onto it picks it up; the server spends one shard per spell forged.
+
 Plugin failures never crash the game: any exception inside a hook disables the
 plugin that owns it and emits a `PLUGIN_DISABLED` event.
 """
@@ -38,6 +41,9 @@ PLAYER_ATTACK = 3
 PLAYER_MAX_MANA = 10
 MANA_REGEN_PER_TURN = 1
 DESCEND_HEAL = 5
+ARCANE_SHARD = "arcane_shard"
+SHARD_EVERY = 3
+"""An arcane shard lies on depths 1, 1 + SHARD_EVERY, 1 + 2 x SHARD_EVERY, ..."""
 
 MAX_OPS_PER_TURN = 2_000
 """Ctx calls allowed during one entity's turn before the running plugin is disabled."""
@@ -58,6 +64,10 @@ EncounterTable = Callable[[int], Sequence[tuple[str, int]]]
 
 def goblins_only(depth: int) -> Sequence[tuple[str, int]]:
     return [("goblin", 1)]
+
+
+def has_shard(depth: int) -> bool:
+    return depth % SHARD_EVERY == 1 % SHARD_EVERY
 
 
 def monsters_per_room(depth: int) -> tuple[int, int]:
@@ -90,6 +100,10 @@ class Game:
         self.history: list[Event] = []
         self.entities: dict[int, Entity] = {}
         self.spellbook: list[str] = []
+        self.items: dict[Pos, str] = {}
+        """Items lying on the floor (position -> item kind)."""
+        self.inventory: dict[str, int] = {}
+        """Items the player carries (item kind -> count)."""
         self.spell_ready_turn: dict[str, int] = {}
         self.disabled_plugins: dict[str, str] = {}
         self.ctx = GameContext(self)
@@ -130,6 +144,7 @@ class Game:
         level = generate_level(rng)
         game = cls(level.map, registry, seed, level.rooms[0].center, encounters)
         game._populate(level, rng)
+        game._place_items(level, rng)
         for spell_id in spells:
             game.learn_spell(spell_id)
         game.start()
@@ -147,12 +162,15 @@ class Game:
     ) -> Game:
         """Build a game from an ASCII map: `@` is the player, `legend` maps chars to monsters.
 
-        Monster characters are lowercase for enemies and uppercase for allies.
+        Monster characters are lowercase for enemies and uppercase for allies; `*` is an
+        arcane shard.
         """
         game_map, markers = GameMap.from_ascii(rows)
         if len(markers.get("@", [])) != 1:
             raise ValueError("map needs exactly one '@'")
         game = cls(game_map, registry, seed, markers.pop("@")[0], encounters)
+        for pos in markers.pop("*", []):
+            game.items[pos] = ARCANE_SHARD
         legend = legend or {}
         placements = sorted((pos.y, pos.x, ch) for ch, ps in markers.items() for pos in ps)
         for y, x, ch in placements:
@@ -189,6 +207,17 @@ class Game:
     def load_plugin(self, plugin: Plugin) -> None:
         """Hot-load a plugin into the running game."""
         self.registry.add(plugin)
+
+    def add_item(self, item: str, count: int = 1) -> None:
+        self.inventory[item] = self.inventory.get(item, 0) + count
+
+    def use_item(self, item: str) -> bool:
+        """Spend one carried item. Returns False (changing nothing) if the player has none."""
+        if self.inventory.get(item, 0) < 1:
+            return False
+        self.inventory[item] -= 1
+        self.emit(EventType.ITEM_USED, entity=self.player.id, item=item, count=self.inventory[item])
+        return True
 
     def learn_spell(self, spell_id: str) -> None:
         if spell_id not in self.registry.spells:
@@ -376,6 +405,16 @@ class Game:
             **{"from": [old.x, old.y]},
             to=[pos.x, pos.y],
         )
+        if entity is self.player and pos in self.items:
+            item = self.items.pop(pos)
+            self.add_item(item)
+            self.emit(
+                EventType.ITEM_PICKED_UP,
+                entity=entity.id,
+                item=item,
+                pos=[pos.x, pos.y],
+                count=self.inventory[item],
+            )
 
     def first_step_toward(self, start: Pos, goal: Pos) -> Pos | None:
         """First tile of a shortest 8-way path to `goal` (which may be occupied), or None.
@@ -489,6 +528,16 @@ class Game:
                 pos = free.pop(rng.randrange(len(free)))
                 self.add_monster(rng.choices(ids, weights)[0], pos)
 
+    def _place_items(self, level: GeneratedLevel, rng: random.Random) -> None:
+        """Hide an arcane shard in a random monster room, on shard depths."""
+        rooms = level.rooms[1:]
+        if not has_shard(self.depth) or not rooms:
+            return
+        room = rooms[rng.randrange(len(rooms))]
+        free = [pos for pos in room.floor_tiles() if self.is_walkable(pos)]
+        if free:
+            self.items[free[rng.randrange(len(free))]] = ARCANE_SHARD
+
     def _open_stairs(self) -> None:
         """Put stairs down on the reachable floor tile farthest from the player."""
         start = self.player.pos
@@ -515,11 +564,13 @@ class Game:
             del self.entities[entity.id]
         self.map = level.map
         self.stairs = None
+        self.items = {}
         self.player.pos = level.rooms[0].center
         self.player.hp = min(self.player.max_hp, self.player.hp + DESCEND_HEAL)
         self.player.mana = self.player.max_mana
         self._populate(level, rng)
-        self.emit(EventType.LEVEL_STARTED, depth=self.depth)
+        self._place_items(level, rng)
+        self.emit(EventType.LEVEL_STARTED, depth=self.depth, shard=bool(self.items))
 
     def apply_status(
         self, target: Entity, status_id: str, duration: int | None, source: int | None
@@ -742,5 +793,10 @@ class Game:
                 }
                 for spell in (self.registry.spells[s] for s in self.spellbook)
             ],
+            "items": [
+                {"kind": kind, "pos": [pos.x, pos.y]}
+                for pos, kind in sorted(self.items.items(), key=lambda item: (item[0].y, item[0].x))
+            ],
+            "inventory": dict(self.inventory),
             "disabled_plugins": dict(self.disabled_plugins),
         }

@@ -74,9 +74,18 @@ def describe(
         case EventType.LEVEL_CLEARED:
             return "The last monster falls. Stairs down have opened (>)."
         case EventType.LEVEL_STARTED:
+            shard = " An arcane shard glimmers somewhere on this level." if d["shard"] else ""
             return (
-                f"You descend to depth {d['depth']}. You catch your breath and your mana returns."
+                f"You descend to depth {d['depth']}. You catch your breath and your mana "
+                f"returns.{shard}"
             )
+        case EventType.ITEM_PICKED_UP:
+            return (
+                f"You pick up an arcane shard ({d['count']} carried). "
+                "Take it to the Arcane Forge to invent a spell."
+            )
+        case EventType.ITEM_USED:
+            return "The Arcane Forge consumes an arcane shard."
         case EventType.GAME_OVER:
             return f"*** You died on depth {d['depth']}. ***"
     return None

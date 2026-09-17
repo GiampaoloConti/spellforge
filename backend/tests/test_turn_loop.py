@@ -84,7 +84,7 @@ def test_stepping_on_stairs_descends_to_a_harder_level(make_game):
     game.submit(Move(Pos(1, 0)))
     turn_before = game.turn
     events = game.submit(Move(Pos(1, 0)))
-    assert events_of(events, EventType.LEVEL_STARTED) == [{"depth": 2}]
+    assert events_of(events, EventType.LEVEL_STARTED) == [{"depth": 2, "shard": False}]
     assert game.depth == 2 and game.turn == turn_before + 1
     assert game.stairs is None and ">" not in "".join(game.map.to_ascii())
     assert game.player.hp == 10 + 5 and game.player.mana == game.player.max_mana

@@ -22,7 +22,9 @@ class EventType(StrEnum):
     MESSAGE = "message"  # text
     PLUGIN_DISABLED = "plugin_disabled"  # plugin, reason
     LEVEL_CLEARED = "level_cleared"  # depth, stairs
-    LEVEL_STARTED = "level_started"  # depth
+    LEVEL_STARTED = "level_started"  # depth, shard (an arcane shard lies on this level)
+    ITEM_PICKED_UP = "item_picked_up"  # entity, item, pos, count (now carried)
+    ITEM_USED = "item_used"  # entity, item, count (left)
     GAME_OVER = "game_over"  # result ("lost"), depth
 
 

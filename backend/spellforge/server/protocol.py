@@ -61,7 +61,7 @@ class DevMessage(_Message):
     """Development helpers (demos, automated browser checks). Ignored unless enabled."""
 
     type: Literal["dev"]
-    command: Literal["clear_level", "descend"]
+    command: Literal["clear_level", "descend", "give_shard"]
 
 
 ClientMessage = Annotated[
@@ -116,7 +116,8 @@ def forge_message(status: str, message: str, **fields: Any) -> dict[str, Any]:
     """Progress of a spell being forged, pushed while the game keeps running.
 
     status: "started" | "working" | "done" | "failed". "done" carries the new spell, its
-    source code and the updated game state.
+    source code and the updated game state; "started" and "failed" carry the state when the
+    arcane shard count changed (spent, or given back).
     """
     return {"type": "forge", "status": status, "message": message, **fields}
 
