@@ -66,7 +66,8 @@ role with `SPELLFORGE_<ROLE>_MODEL` / `SPELLFORGE_<ROLE>_EFFORT` (roles: `design
                                                                   └─► Artist ─────────────────────────┴─► Tester ─► deeper levels
 ```
 
-1. **Profile (deterministic).** When the player clears a level, the session summarises the event
+1. **Profile (deterministic).** When the player clears an even depth (2, 4, 6, ...; see
+   `DUNGEON_MASTER_EVERY`), the session summarises the event
    history: spells cast and how often, melee attacks, damage dealt with spells and in melee, area
    hits, statuses inflicted, summons, and which monsters hurt the player.
 2. **Dungeon Master (Sonnet 5).** Designs one monster that punishes the dominant habit, with a

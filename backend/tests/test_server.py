@@ -369,39 +369,56 @@ class ScriptedDungeonMaster:
         return await real.create_counter(profile, depth, existing, taken_ids, plugin_id, progress)
 
 
+async def clear_level(client: Client, depth: int) -> None:
+    """Kill all but one enemy, then kill the last one with a real action at `depth`."""
+    game = client.session.game
+    game.depth = depth
+    for enemy in [e for e in game.entities.values() if e is not game.player]:
+        if enemy is not list(game.entities.values())[-1]:
+            game.kill(enemy)
+    last = next(e for e in game.entities.values() if e is not game.player)
+    last.hp = 1
+    game.player.pos = next(p for p in last.pos.neighbors() if game.is_walkable(p))
+    step = game.player.pos.direction_to(last.pos)
+    await client.send({"type": "action", "action": {"kind": "move", "dx": step.x, "dy": step.y}})
+
+
+def test_the_dungeon_master_skips_odd_levels():
+    async def scenario():
+        dm = ScriptedDungeonMaster()
+        client = Client(dungeon_master=dm)
+        await client.send(new_game())
+        await clear_level(client, depth=1)
+        return client, dm
+
+    client, dm = run(scenario())
+    assert client.session.game.stairs is not None
+    assert dm.calls == [] and client.session._dm_task is None
+
+
 def test_clearing_a_level_summons_a_counter_monster_for_deeper_levels():
     async def scenario():
         dm = ScriptedDungeonMaster()
         client = Client(dungeon_master=dm)
         await client.session.start()
         await client.send(new_game())
-        game = client.session.game
-        for enemy in [e for e in game.entities.values() if e is not game.player]:
-            if enemy is not list(game.entities.values())[-1]:
-                game.kill(enemy)
-        last = next(e for e in game.entities.values() if e is not game.player)
-        last.hp = 1
-        game.player.pos = next(p for p in last.pos.neighbors() if game.is_walkable(p))
-        step = game.player.pos.direction_to(last.pos)
-        await client.send(
-            {"type": "action", "action": {"kind": "move", "dx": step.x, "dy": step.y}}
-        )
+        await clear_level(client, depth=2)
         await client.session._dm_task
         return client, dm
 
     client, dm = run(scenario())
     assert client.sent[0]["dungeon_master"] is True
     [(profile, depth, plugin_id)] = dm.calls
-    assert depth == 2 and plugin_id.startswith("dm_") and "Reached depth 1" in profile
+    assert depth == 3 and plugin_id.startswith("dm_") and "Reached depth 2" in profile
     messages = [m for m in client.sent if m["type"] == "dungeon_master"]
     assert messages[0]["status"] == "started" and messages[-1]["status"] == "done"
     done = messages[-1]
-    assert done["monster"]["name"] == "Warded Golem" and done["monster"]["first_depth"] == 2
+    assert done["monster"]["name"] == "Warded Golem" and done["monster"]["first_depth"] == 3
     assert done["monster"]["sprite"] in done["sprites"]
     session = client.session
-    assert session.counter_monsters == [("warded_golem", 2)]
-    assert ("warded_golem", 5) in session.encounters(2)
-    assert all(monster != "warded_golem" for monster, _ in session.encounters(1))
+    assert session.counter_monsters == [("warded_golem", 3)]
+    assert ("warded_golem", 5) in session.encounters(3)
+    assert all(monster != "warded_golem" for monster, _ in session.encounters(2))
     run(session.close())
 
 

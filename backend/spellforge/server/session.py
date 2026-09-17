@@ -2,7 +2,8 @@
 
 - The forge turns the player's spell ideas into plugins (the agent team, or one agent).
   Each spell costs an arcane shard, found every third level; a failed forge gives it back.
-- The Dungeon Master designs counter-monsters when the player clears a level.
+- The Dungeon Master designs counter-monsters when the player clears every second level.
+- A finished run is recorded on the leaderboard under the player's browser id and name.
 
 No networking here: replies and pushed updates go through the `send` callback, so the
 session is easy to test. All game mutations happen on the event loop, one message at a time;
@@ -66,6 +67,8 @@ logger = logging.getLogger(__name__)
 STARTING_SPELLS = ("firebolt", "frost_nova")
 MAX_FORGED_SPELLS_PER_GAME = 6
 MAX_COUNTER_MONSTERS_PER_GAME = 3
+DUNGEON_MASTER_EVERY = 2
+"""The Dungeon Master designs a counter-monster when the player clears depths 2, 4, 6, ..."""
 COUNTER_MONSTER_WEIGHT = 5
 """Encounter weight of a Dungeon Master monster: high, so the player actually meets it."""
 FORGE_OFFLINE = "The forge is offline: add ANTHROPIC_API_KEY to .env and restart the server."
@@ -214,12 +217,14 @@ class GameSession:
         await self._after(self.game, events)
 
     async def _after(self, game: Game, events: list[Event]) -> None:
-        """Send what happened, and react to it (a cleared level summons the Dungeon Master)."""
+        """Send what happened, and react to it: every second cleared level summons the Dungeon
+        Master, and a death goes on the leaderboard."""
         assert self._narrator is not None
         await self._send(
             state_message(game, events, self._narrator.narrate(events), self._unsent_sprites(game))
         )
-        if any(event.type is EventType.LEVEL_CLEARED for event in events):
+        cleared = any(event.type is EventType.LEVEL_CLEARED for event in events)
+        if cleared and game.depth % DUNGEON_MASTER_EVERY == 0:
             await self._summon_dungeon_master(game)
 
     async def _dev(self, message: DevMessage) -> None:

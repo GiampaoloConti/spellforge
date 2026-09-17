@@ -15,7 +15,7 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
  your idea ─► Designer ───┼─► Coder (starts early) ───────────┼─► Tester ─► hot-loaded into the game
                spec       └─► Artist (pixel art) ─────────────┘  sandbox sim, ↺ retries
 
- clear a level ─► Dungeon Master studies how you fight ─► a new monster built to counter you
+ clear 2 levels ─► Dungeon Master studies how you fight ─► a new monster built to counter you
 ```
 
 - **Deterministic engine, generated content.** A small hand-written Python engine runs the game. Everything creative is a plugin written by agents against a narrow plugin API.
@@ -23,7 +23,7 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
 - **Generated code is sandboxed.** It goes through static AST checks, then runs in an isolated process with resource limits and access to the plugin API only.
 - **Nothing crashes the game.** Plugins that fail are disabled and replaced with safe fallbacks.
 - **Balance is measured, not just judged.** Every forged spell is cast among training dummies; damage, healing, crowd control, summons and reach are checked against limits set by its mana cost, and anything over budget goes back to the Balancer with the numbers.
-- **The dungeon fights back.** When you clear a level, a Dungeon Master agent reads how you play and designs a monster to counter it, which goes through the same balance, code and test pipeline.
+- **The dungeon fights back.** Every second level you clear, a Dungeon Master agent reads how you play and designs a monster to counter it, which goes through the same balance, code and test pipeline.
 - **Measured, not claimed.** Benchmarks compare model choices and the single agent against the team on success rate, cost and latency ([docs/agents.md](docs/agents.md)).
 
 ## Try it
