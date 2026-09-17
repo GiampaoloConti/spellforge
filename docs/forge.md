@@ -15,11 +15,16 @@ Code: [`backend/spellforge/agents/`](../backend/spellforge/agents/) and
 
 ## The Spell Writer (`agents/spell_writer.py`)
 
-One call to `claude-opus-5` with adaptive thinking and structured output
-(`{notes, spell_id, plugin_source}`), streamed. The system prompt is stable and cached:
+One call to `claude-opus-5` at effort `low` with adaptive thinking and structured output
+(`{notes, spell_id, plugin_source}`), streamed. The model and effort were chosen by
+benchmark ([evals/forge-models.md](evals/forge-models.md)) and can be overridden with
+`SPELLFORGE_MODEL` / `SPELLFORGE_EFFORT`. Stream events become progress notes in the UI
+("thinking…", "writing the spell… 1.2k characters"). The system prompt is stable and
+cached:
 
 - **Game facts**: player and goblin stats, and the built-in spells as a balance reference.
-- **Rules**: one spell, fresh ids, robust against creatures dying mid-effect.
+- **Rules**: one spell, fresh ids, robust against creatures dying mid-effect, and
+  "make it look right": ideas that change how creatures look must ship a sprite.
 - **Plugin API reference**, generated from the engine's docstrings by
   `agents/api_docs.py`, so the agent's documentation can't drift from the code.
 - **The built-in plugins as examples**. They are loaded exactly like generated code, so
@@ -42,7 +47,9 @@ python -m spellforge.agents.try_forge "a spell that turns enemies into sheep tha
    generators, `with`, private or dunder attributes, `str.format`, or names outside the
    plugin API and safe builtins.
 2. **Sandbox load**: runs the `define_*` validation for types and ranges.
-3. **Game rules**: exactly one spell, no id clashes, mana cost affordable (1-10).
+3. **Game rules**: exactly one spell, no id clashes, mana cost affordable (1-10). If the
+   idea transforms creatures ("turn X into Y", "polymorph", "petrify") but the plugin
+   defines no sprite, that is a problem too, so the writer gets another attempt.
 4. **Test arenas**: cast the spell in a small map at the nearest enemy, a farther enemy and
    an empty floor tile (for tile spells), then play 3 rounds. Any plugin error is a problem
    sent back to the agent. A spell whose cast round matches a plain wait round gets a
@@ -81,9 +88,19 @@ process is started for the live game, the plugin is added to the game's registry
 player learns the spell. The limits are one forge at a time and 6 forged spells per run.
 Starting a new game cancels the forge and kills the plugin processes.
 
-## First measurements
+## Sprites
 
-The M5 eval suite will measure these properly. Early live runs, at effort `high`:
+Plugins draw with `define_sprite(id, palette, rows)`: 16x16 grids of palette characters,
+the same format as the client's built-in art. `define_status(appearance=...)` changes how
+the holder is drawn while the status lasts, and `define_monster(sprite=...)` gives a monster
+its look. The built-in monsters define their sprites this way. The server sends each
+sprite to the client once per run.
+
+## Measurements
+
+See [evals/forge-models.md](evals/forge-models.md) for the model and effort benchmark.
+With the current default (Opus 5, effort `low`), spells take about 11-21 s, first attempt,
+for $0.03-0.05. Early live runs at effort `high`:
 
 | Idea | Attempts | Time | Tokens |
 |---|---|---|---|

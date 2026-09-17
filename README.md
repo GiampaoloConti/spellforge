@@ -45,7 +45,8 @@ python -m spellforge.server
 ```
 
 Press <kbd>F</kbd>, describe a spell, press <kbd>Enter</kbd>, and keep playing while the forge
-writes it. Without an API key the game still works; the forge just stays offline.
+writes it (usually 10-20 seconds). The dungeon is endless: clear a level, take the stairs, and
+see how deep you get. Without an API key the game still works; the forge just stays offline.
 
 For frontend development, run `python -m spellforge.server` and `npm run dev` side by side,
 then open http://localhost:5173. There is also a terminal version: `python -m spellforge`.
@@ -53,6 +54,7 @@ then open http://localhost:5173. There is also a terminal version: `python -m sp
 Tests: `pytest` in `backend/`, `npm test` in `frontend/`.
 
 Design notes: [the forge: agent, sandbox and verification](docs/forge.md),
+[forge model benchmark](docs/evals/forge-models.md),
 [plugin API](docs/plugin-api.md) (what agents write against) and
 [client/server protocol](docs/protocol.md).
 

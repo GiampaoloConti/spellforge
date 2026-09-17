@@ -31,9 +31,12 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 // Something happened (new game or a completed round)
 {
   "type": "state",
-  "state": { /* Game.snapshot(): seed, player_id, turn, status, map, entities, spells */ },
+  "state": { /* Game.snapshot(): seed, player_id, depth, turn, status, map (with ">" stairs
+               once a level is cleared), entities (incl. appearance, can_act), spells */ },
   "events": [ { "type": "damaged", "turn": 3, "target": 4, "pos": [5, 2], "amount": 5, ... } ],
-  "log": ["You cast Firebolt.", "The goblin takes 5 damage (1 HP left)."]
+  "log": ["You cast Firebolt.", "The goblin takes 5 damage (1 HP left)."],
+  // Pixel art for plugin sprites the client hasn't received yet in this run.
+  "sprites": { "goblin": { "palette": { "k": "#140d1c", "g": "#5caa3c" }, "rows": ["..."] } }
 }
 
 // Rejected (invalid action, malformed message). Game state is unchanged.
@@ -41,6 +44,10 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 ```
 
 - `state` is the full snapshot, not a diff. The map is about 1 KB, so simplicity wins.
+- The dungeon is endless: `level_cleared` and `level_started` events mark progress, and the
+  run ends with `status: "lost"` when the player dies.
+- An entity's `appearance` is the sprite id to draw (for example `"rock"` while petrified).
+  `null` means the client's default art for its kind.
 - `events` are structured engine events (see `engine/events.py`). The client uses them
   for effects such as hit flashes and floating damage numbers.
 - `log` is the same events rendered as text by `spellforge/narration.py`, shared with
@@ -62,7 +69,7 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 { "type": "forge", "status": "done", "message": "...", "spell": { /* spell entry */ },
   "notes": "...", "source": "def on_cast(ctx, caster, target): ...", "warnings": [],
   "attempts": 1, "seconds": 14.7, "input_tokens": 6600, "output_tokens": 1200,
-  "state": { /* snapshot */ } }
+  "state": { /* snapshot */ }, "sprites": { /* art the spell introduced */ } }
 
 // Failure (also used when the forge is busy, offline, or the run has ended).
 { "type": "forge", "status": "failed", "message": "...", "problems": ["line 3: ..."] }
