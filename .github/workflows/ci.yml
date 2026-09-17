@@ -60,6 +60,11 @@ jobs:
           git rm -r -q --cached docs
           rm -rf docs
           cp deploy/huggingface/README.md README.md
+          # Hugging Face stores binaries via Git LFS/Xet, not raw blobs. Track binaries as
+          # LFS for this Space commit only (the GitHub repo keeps them as normal files).
+          git lfs install --local
+          git lfs track "*.mp3"
+          git add --renormalize .
           git add -A
           git commit -q -m "Deploy ${GITHUB_SHA::7} from GitHub"
           git push --force "https://${HF_SPACE%%/*}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space:main
