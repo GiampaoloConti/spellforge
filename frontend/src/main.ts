@@ -7,7 +7,7 @@ import { Effects } from "./effects";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
 import type { ActionPayload, GameState, Point, ServerMessage } from "./protocol";
-import { describeTile, Renderer, type Targeting } from "./renderer";
+import { BOB_MS, describeTile, Renderer, type Targeting } from "./renderer";
 import { Log, renderSpells, renderStats } from "./ui";
 
 /** Look up a required element; fail loudly if index.html and this file disagree. */
@@ -76,6 +76,7 @@ function handleMessage(message: ServerMessage): void {
   }
   if (startingNewGame) {
     log.clear();
+    renderer.reset();
     startingNewGame = false;
   }
   state = message.state;
@@ -281,3 +282,5 @@ function drawFrame(now: number): void {
   renderer.draw(state, targeting, effects, now);
   if (effects.active) requestDraw(); // keep animating until effects fade out
 }
+
+setInterval(requestDraw, BOB_MS); // idle animation

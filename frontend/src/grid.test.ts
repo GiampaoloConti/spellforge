@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { distance, hasLineOfSight, line, targetProblem, validTargets } from "./grid";
+import {
+  cameraOrigin,
+  distance,
+  hasLineOfSight,
+  line,
+  targetProblem,
+  tileKind,
+  validTargets,
+} from "./grid";
 import type { EntityState, GameState, SpellState } from "./protocol";
 
 function entity(id: number, pos: [number, number], faction: "player" | "enemy"): EntityState {
@@ -98,5 +106,22 @@ describe("targeting", () => {
       entity(5, [1, 1], "player"),
     ]);
     expect(validTargets(state, firebolt).map((e) => e.id)).toEqual([3, 2]);
+  });
+});
+
+describe("drawing helpers", () => {
+  it("classifies wall tiles by what is next to them", () => {
+    const state = game(["#####", "#####", "##.##", "#####"], []);
+    expect(tileKind(state, 2, 2)).toBe("floor");
+    expect(tileKind(state, 2, 1)).toBe("wall_face"); // floor directly below
+    expect(tileKind(state, 1, 3)).toBe("wall_top"); // diagonal to the floor
+    expect(tileKind(state, 0, 0)).toBe("void"); // solid rock
+  });
+
+  it("keeps the camera centred but inside the map", () => {
+    expect(cameraOrigin(24, 30, 48)).toBe(9);
+    expect(cameraOrigin(2, 30, 48)).toBe(0);
+    expect(cameraOrigin(46, 30, 48)).toBe(18);
+    expect(cameraOrigin(5, 48, 48)).toBe(0); // whole map visible
   });
 });

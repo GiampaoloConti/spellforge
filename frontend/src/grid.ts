@@ -72,3 +72,33 @@ export function validTargets(state: GameState, spell: SpellState): EntityState[]
     .filter((e) => e.faction !== me.faction && targetProblem(state, spell, e.pos) === null)
     .sort((a, b) => distance(me.pos, a.pos) - distance(me.pos, b.pos) || a.id - b.id);
 }
+
+export type TileKind = "floor" | "wall_face" | "wall_top" | "void";
+
+/**
+ * How to draw a map cell: walls with floor directly below show their brick face,
+ * other walls next to floor show their top, and solid rock is left dark.
+ */
+export function tileKind(state: GameState, x: number, y: number): TileKind {
+  if (!isWall(state, [x, y])) return "floor";
+  if (y + 1 < state.map.length && !isWall(state, [x, y + 1])) return "wall_face";
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const cell = state.map[y + dy]?.[x + dx];
+      if (cell !== undefined && cell !== "#") return "wall_top";
+    }
+  }
+  return "void";
+}
+
+/** Stable pseudo-random number for a tile, so floor variations don't flicker. */
+export function tileHash(x: number, y: number): number {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** Top-left tile of a `view`-sized window centred on `center`, kept inside the map. */
+export function cameraOrigin(center: number, view: number, mapSize: number): number {
+  return Math.max(0, Math.min(center - Math.floor(view / 2), mapSize - view));
+}
