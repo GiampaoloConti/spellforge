@@ -2,7 +2,6 @@
 name = "spellforge"
 version = "0.0.1"
 description = "A roguelike whose spells are written at runtime by a team of AI agents."
-readme = "../README.md"
 requires-python = ">=3.11"
 dependencies = []
 
