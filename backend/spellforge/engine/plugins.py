@@ -73,7 +73,7 @@ def _check_hook(value: object, what: str, required: bool = False) -> Any:
     return value
 
 
-def _make_namespace(plugin: Plugin) -> dict[str, Any]:
+def make_namespace(plugin: Plugin) -> dict[str, Any]:
     def define_spell(
         *,
         id: str,
@@ -228,7 +228,7 @@ def load_plugin(plugin_id: str, source: str) -> Plugin:
     except SyntaxError as exc:
         raise PluginLoadError(f"syntax error on line {exc.lineno}: {exc.msg}") from exc
     try:
-        exec(code, _make_namespace(plugin))
+        exec(code, make_namespace(plugin))
     except PluginLoadError:
         raise
     except Exception as exc:

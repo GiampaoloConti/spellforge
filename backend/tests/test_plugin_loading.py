@@ -6,7 +6,7 @@ from conftest import plugin
 from spellforge.engine import PluginLoadError, Registry, load_plugin
 from spellforge.engine.api import Ctx
 from spellforge.engine.context import GameContext
-from spellforge.engine.plugins import PLUGIN_GLOBALS, Plugin, _make_namespace
+from spellforge.engine.plugins import PLUGIN_GLOBALS, Plugin, make_namespace
 from spellforge.plugins import BUILTIN_PLUGIN_IDS, builtin_source, default_registry
 
 MINIMAL = """
@@ -70,7 +70,7 @@ def test_registry_rejects_id_clashes_atomically():
 
 
 def test_plugin_namespace_is_exactly_the_documented_surface():
-    namespace = _make_namespace(Plugin(id="probe", source=""))
+    namespace = make_namespace(Plugin(id="probe", source=""))
     public = {name for name in namespace if not name.startswith("__")}
     assert public == set(PLUGIN_GLOBALS)
     assert "open" not in namespace["__builtins__"]

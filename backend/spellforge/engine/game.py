@@ -567,7 +567,8 @@ class Game:
     def disable_plugin(self, plugin_id: str, error: Exception) -> None:
         if plugin_id in self.disabled_plugins or plugin_id not in self.registry.plugins:
             return
-        reason = f"{type(error).__name__}: {error}"
+        # Errors relayed from a sandboxed plugin already carry their original type in `reason`.
+        reason = getattr(error, "reason", None) or f"{type(error).__name__}: {error}"
         self.disabled_plugins[plugin_id] = reason
         self.emit(EventType.PLUGIN_DISABLED, plugin=plugin_id, reason=reason)
         owned = {s.id for s in self.registry.plugins[plugin_id].statuses}
