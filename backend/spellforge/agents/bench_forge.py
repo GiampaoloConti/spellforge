@@ -36,23 +36,9 @@ CONFIGS = [
     ("claude-haiku-4-5", "-"),
 ]
 
-# USD per million tokens: (input, output). Cache writes cost 1.25x input, reads 0.1x.
-PRICES = {
-    "claude-opus-5": (5.0, 25.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
-
 
 def cost(draft: SpellDraft) -> float:
-    price_in, price_out = PRICES[draft.model]
-    uncached = draft.input_tokens - draft.cache_read_tokens - draft.cache_write_tokens
-    return (
-        uncached * price_in
-        + draft.cache_write_tokens * price_in * 1.25
-        + draft.cache_read_tokens * price_in * 0.1
-        + draft.output_tokens * price_out
-    ) / 1_000_000
+    return draft.usage.cost_usd
 
 
 @dataclass

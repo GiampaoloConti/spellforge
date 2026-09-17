@@ -17,11 +17,8 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
-from spellforge.agents.spell_writer import (
-    ClaudeSpellWriter,
-    SpellWriter,
-    forge_credentials_available,
-)
+from spellforge.agents.llm import credentials_available
+from spellforge.agents.spell_writer import ClaudeSpellWriter, SpellWriter
 from spellforge.server.session import GameSession
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -33,7 +30,7 @@ WriterFactory = Callable[[], SpellWriter | None]
 @cache
 def default_writer() -> SpellWriter | None:
     """One shared Claude writer (and HTTP connection pool), if credentials are configured."""
-    return ClaudeSpellWriter() if forge_credentials_available() else None
+    return ClaudeSpellWriter() if credentials_available() else None
 
 
 def create_app(

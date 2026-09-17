@@ -7,6 +7,7 @@ import pytest
 
 from spellforge.agents.api_docs import plugin_api_reference
 from spellforge.agents.forge import forge_spell
+from spellforge.agents.llm import Usage
 from spellforge.agents.spell_writer import (
     Attempt,
     SpellDraft,
@@ -61,7 +62,10 @@ class ScriptedWriter:
         if isinstance(result, Exception):
             raise result
         return SpellDraft(
-            spell_id="spark", notes="Zap!", source=result, input_tokens=10, output_tokens=5
+            spell_id="spark",
+            notes="Zap!",
+            source=result,
+            usage=Usage(input_tokens=10, output_tokens=5),
         )
 
 
@@ -153,7 +157,7 @@ def test_prompts_are_stable_and_carry_the_request():
 
 
 def test_double_escaped_characters_in_notes_are_decoded():
-    from spellforge.agents.spell_writer import _unescape
+    from spellforge.agents.llm import unescape as _unescape
 
     assert _unescape("then 2 \u2014 up to 3") == "then 2 — up to 3"
     assert _unescape("plain text") == "plain text"
@@ -188,11 +192,12 @@ def test_transformation_without_a_sprite_is_sent_back():
 
 
 def test_request_options_match_each_model():
-    from spellforge.agents.spell_writer import request_options
+    from spellforge.agents.llm import request_options
 
-    opus = request_options("claude-opus-5", "low")
+    schema = {"type": "object"}
+    opus = request_options("claude-opus-5", "low", schema)
     assert opus["fallbacks"] == "default" and opus["output_config"]["effort"] == "low"
-    sonnet = request_options("claude-sonnet-5", "medium")
+    sonnet = request_options("claude-sonnet-5", "medium", schema)
     assert "fallbacks" not in sonnet and sonnet["thinking"] == {"type": "adaptive"}
-    haiku = request_options("claude-haiku-4-5", "low")
+    haiku = request_options("claude-haiku-4-5", "low", schema)
     assert set(haiku) == {"output_config"} and "effort" not in haiku["output_config"]
