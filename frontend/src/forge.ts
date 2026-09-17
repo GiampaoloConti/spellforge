@@ -2,7 +2,7 @@
 //
 // All text from the server (notes, problems, generated code) goes in with textContent.
 
-import { changeList, PipelineView, SINGLE_STEPS, TEAM_STEPS } from "./pipeline";
+import { changeList, PipelineView, SINGLE_STEPS, stageMessage, TEAM_STEPS } from "./pipeline";
 import type { ForgeDone, StageDetails, TeamReport } from "./protocol";
 import { shardIcon } from "./ui";
 
@@ -100,7 +100,7 @@ export class ForgePanel {
   }
 
   progress(details: StageDetails, message: string): void {
-    this.message.textContent = message;
+    this.message.textContent = stageMessage(details.stage, message);
     this.pipeline.update(details, message);
   }
 

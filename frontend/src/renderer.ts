@@ -40,6 +40,8 @@ const COLORS = {
 const FONT = 'ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace';
 /** Creatures bob on this beat, so the board is redrawn at least this often. */
 export const BOB_MS = 420;
+/** How long a creature takes to slide from its old tile to the new one. */
+const STEP_MS = 120;
 
 export class Renderer {
   /** On-screen size of one map tile in CSS pixels: always a whole multiple of 16. */
@@ -48,7 +50,9 @@ export class Renderer {
   private view = { cols: 1, rows: 1 };
   private camera = { x: 0, y: 0 };
   private readonly facing = new Map<number, 1 | -1>();
-  private readonly lastX = new Map<number, number>();
+  private readonly lastPos = new Map<number, Point>();
+  /** Creatures that just stepped: where they came from and when, for the slide. */
+  private readonly steps = new Map<number, { from: Point; start: number }>();
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
 
@@ -86,7 +90,13 @@ export class Renderer {
   /** Forget per-creature animation state (entity ids restart in a new game). */
   reset(): void {
     this.facing.clear();
-    this.lastX.clear();
+    this.lastPos.clear();
+    this.steps.clear();
+  }
+
+  /** True while a creature is mid-step, so the page keeps asking for frames. */
+  get animating(): boolean {
+    return this.steps.size > 0;
   }
 
   /** The map tile under a mouse position, or null outside the visible map. */
@@ -119,7 +129,7 @@ export class Renderer {
     this.drawMap(state);
     this.drawItems(state, now);
     if (targeting) this.drawTargeting(state, targeting);
-    this.updateFacing(state);
+    this.updateMotion(state, now);
     const byRow = [...state.entities].sort((a, b) => a.pos[1] - b.pos[1] || a.id - b.id);
     for (const entity of byRow) this.drawEntity(entity, state, now);
     this.drawEffects(effects, now);
@@ -202,24 +212,50 @@ export class Renderer {
     }
   }
 
-  /** Creatures face the way they last moved; idle monsters turn toward the player. */
-  private updateFacing(state: GameState): void {
+  /**
+   * Creatures face the way they last moved; idle monsters turn toward the player. A monster
+   * that changed tile since the last frame starts a slide, so it walks instead of teleporting.
+   */
+  private updateMotion(state: GameState, now: number): void {
     const me = player(state);
     for (const entity of state.entities) {
-      const previousX = this.lastX.get(entity.id);
-      const dx = previousX === undefined ? 0 : entity.pos[0] - previousX;
+      const previous = this.lastPos.get(entity.id);
+      const dx = previous ? entity.pos[0] - previous[0] : 0;
       if (dx !== 0) {
         this.facing.set(entity.id, dx > 0 ? 1 : -1);
       } else if (entity.id !== state.player_id && me && me.pos[0] !== entity.pos[0]) {
         this.facing.set(entity.id, me.pos[0] > entity.pos[0] ? 1 : -1);
       }
-      this.lastX.set(entity.id, entity.pos[0]);
+      // Only ordinary steps slide: a blink or a teleport should still be instant.
+      const dy = previous ? entity.pos[1] - previous[1] : 0;
+      const stepped = entity.id !== state.player_id && (dx !== 0 || dy !== 0);
+      if (stepped && Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+        this.steps.set(entity.id, { from: previous!, start: now });
+      } else if (stepped) {
+        this.steps.delete(entity.id);
+      }
+      this.lastPos.set(entity.id, entity.pos);
     }
+  }
+
+  /** Where a creature is drawn right now, in tiles: mid-step it sits between two tiles. */
+  private drawPos(entity: EntityState, now: number): Point {
+    const step = this.steps.get(entity.id);
+    if (!step) return entity.pos;
+    const t = (now - step.start) / STEP_MS;
+    if (t >= 1) {
+      this.steps.delete(entity.id);
+      return entity.pos;
+    }
+    return [
+      step.from[0] + (entity.pos[0] - step.from[0]) * t,
+      step.from[1] + (entity.pos[1] - step.from[1]) * t,
+    ];
   }
 
   private drawEntity(entity: EntityState, state: GameState, now: number): void {
     const { ctx, tile, scale } = this;
-    const [x, y] = entity.pos;
+    const [x, y] = this.drawPos(entity, now);
     const px = x * tile;
     const py = y * tile;
     const frozen = entity.statuses.some((s) => s.id === "frozen");

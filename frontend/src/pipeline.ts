@@ -35,6 +35,24 @@ export const DUNGEON_MASTER_STEPS: StepDef[] = [
   { stage: "testing", label: "Tester" },
 ];
 
+// Player mode hides the agents, so the loading bar gets a line of dungeon flavour instead of
+// the server's "the Balancer is reviewing…" notes. Worded for spells and monsters alike.
+const FLAVOUR: Record<Stage, string> = {
+  designing: "Sigils are sketched by candlelight…",
+  balancing: "An archmage weighs it against the laws of magic…",
+  coding: "Runes are carved into the tablet…",
+  drawing: "The sigil is painted in ink and gold…",
+  writing: "The incantation is transcribed…",
+  testing: "It is tried out on straw dummies…",
+  retrying: "The first casting faltered; the work begins again…",
+  loading: "The magic settles into your spellbook…",
+};
+
+/** In player mode, what the loading bar says while `stage` runs; in dev mode, the raw note. */
+export function stageMessage(stage: Stage, message: string): string {
+  return document.body.dataset.mode === "dev" ? message : FLAVOUR[stage];
+}
+
 type StepState = "pending" | "active" | "done";
 
 interface Step extends StepDef {

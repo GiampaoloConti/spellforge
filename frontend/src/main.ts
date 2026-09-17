@@ -501,7 +501,7 @@ function drawFrame(now: number): void {
   if (!state) return;
   effects.prune(now);
   renderer.draw(state, targeting, effects, now);
-  if (effects.active) requestDraw(); // keep animating until effects fade out
+  if (effects.active || renderer.animating) requestDraw(); // until effects fade and steps land
 }
 
 setInterval(requestDraw, BOB_MS); // idle animation

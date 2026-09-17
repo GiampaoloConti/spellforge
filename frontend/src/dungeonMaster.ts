@@ -2,7 +2,7 @@
 
 import { creatureSprite } from "./atlas";
 import { details, el } from "./forge";
-import { changeList, DUNGEON_MASTER_STEPS, PipelineView } from "./pipeline";
+import { changeList, DUNGEON_MASTER_STEPS, PipelineView, stageMessage } from "./pipeline";
 import type { DungeonMasterDone, StageDetails } from "./protocol";
 
 const PREVIEW_SCALE = 4;
@@ -44,7 +44,7 @@ export class DungeonMasterPanel {
   }
 
   progress(details: StageDetails, message: string): void {
-    this.message.textContent = message;
+    this.message.textContent = stageMessage(details.stage, message);
     this.pipeline.update(details, message);
   }
 
