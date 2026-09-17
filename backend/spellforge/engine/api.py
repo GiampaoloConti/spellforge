@@ -11,7 +11,7 @@ Design rules:
 * Plugins change the game only by calling methods on `ctx`. The engine validates
   every call, so a buggy plugin cannot corrupt state.
 * Only plain data crosses the boundary (ints, strings, `Pos`, views), which lets
-  the engine later run plugins in a separate sandboxed process.
+  the engine run plugins in a separate sandboxed process (see `spellforge.sandbox`).
 * All randomness comes from `ctx`, which is seeded, so games replay exactly.
 """
 
