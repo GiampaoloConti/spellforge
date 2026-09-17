@@ -26,7 +26,7 @@ from spellforge.engine.game import (
 from spellforge.plugins import builtin_source
 
 DEFAULT_MODEL = "claude-opus-5"
-DEFAULT_EFFORT = "high"
+DEFAULT_EFFORT = "low"  # measured: ~40% faster than "high" at equal success (docs/evals)
 MAX_OUTPUT_TOKENS = 32_000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 

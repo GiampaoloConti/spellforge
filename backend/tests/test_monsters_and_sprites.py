@@ -152,10 +152,10 @@ def test_sprites_pass_through_the_sandbox():
     ("old", "new", "message"),
     [
         ("'#8a8f99'", "'grey'", "must look like '#1a2b3c'"),
-        ("'....kkkkkkkk....'", "'....kkkkkkkk...'", "row 6 must be a string of 16"),
+        ("'....kkkkkkkk....'", "'k....kkkkkkkk....k'", "row 6 has 18 characters"),
         ("'...kRRrrrrrrk...'", "'...kRRzzzzzzk...'", "missing from the palette"),
         ('appearance="rock"', 'appearance="boulder"', "not defined: add define_sprite"),
-        ("'k': '#140d1c'", "'.': '#140d1c'", "must be one printable character, not '.'"),
+        ("'k': '#140d1c'", "'kk': '#140d1c'", "must be one printable character"),
     ],
 )
 def test_bad_sprites_are_rejected(old, new, message):
@@ -171,3 +171,18 @@ def test_sprite_ids_cannot_clash():
     )
     with pytest.raises(PluginLoadError, match="sprite id"):
         registry.add(load_plugin("petrify", clash))
+
+
+def test_small_sprite_counting_slips_are_forgiven():
+    rows = list(ROCK["rows"])
+    rows[7] = rows[7][:-1]  # 15 characters
+    rows[8] = rows[8] + ".."  # 18, transparent overflow
+    del rows[0]  # 15 rows
+    palette = {".": "#000000", **ROCK["palette"]}  # "." listed as a color
+    source = PETRIFY.replace(repr(ROCK["rows"]), repr(rows)).replace(
+        repr(ROCK["palette"]), repr(palette)
+    )
+    [sprite] = load_plugin("petrify", source).sprites
+    assert len(sprite.rows) == 16 and all(len(r) == 16 for r in sprite.rows)
+    assert "." not in sprite.palette
+    assert sprite.rows[-2] == ROCK["rows"][-2]  # art stays anchored to the bottom

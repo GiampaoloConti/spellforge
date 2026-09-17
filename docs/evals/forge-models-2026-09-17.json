@@ -1,0 +1,377 @@
+{
+ "ideas": [
+  "turn enemies into rocks for a few turns",
+  "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+  "summon a spirit wolf that fights beside me for 5 turns"
+ ],
+ "configs": [
+  [
+   "claude-opus-5",
+   "high"
+  ],
+  [
+   "claude-opus-5",
+   "low"
+  ],
+  [
+   "claude-sonnet-5",
+   "medium"
+  ],
+  [
+   "claude-sonnet-5",
+   "low"
+  ],
+  [
+   "claude-haiku-4-5",
+   "-"
+  ]
+ ],
+ "summary": "| Model | Effort | Success | Avg attempts | Avg time | Avg cost | Sprites drawn when needed |\n|---|---|---|---|---|---|---|\n| claude-opus-5 | high | 3/3 | 1.0 | 27.0s | $0.108 | 2/2 |\n| claude-opus-5 | low | 3/3 | 1.0 | 16.8s | $0.072 | 2/2 |\n| claude-sonnet-5 | medium | 3/3 | 1.0 | 16.3s | $0.031 | 2/2 |\n| claude-sonnet-5 | low | 3/3 | 1.3 | 15.8s | $0.040 | 2/2 |\n| claude-haiku-4-5 | - | 2/3 | 1.7 | 21.5s | $0.013 | 1/1 |",
+ "runs": [
+  {
+   "model": "claude-opus-5",
+   "effort": "high",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 31.0,
+    "writer_seconds": 30.1,
+    "input_tokens": 8880,
+    "cache_read_tokens": 0,
+    "output_tokens": 2326,
+    "cost_usd": 0.1134,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify turns one enemy into an inert stone statue for 3 turns \ninert, unable to act, drawn with a new boulder-statue sprite. Balance drawback: hitting the statue shatters the stone and frees the creature early, so it's crowd control rather than a free damage window; 4 mana with a 3-turn cooldown keeps it in line with Frost Nova.",
+    "source": "# Petrify: a single-target control spell. The victim becomes a stone statue that\n# cannot act, but any damage cracks the stone and frees it early.\n\nDURATION = 3\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The petrifying gaze washes over bare stone floor.\")\n        return\n    if victim.id == caster or victim.faction == me.faction:\n        ctx.log(\"The spell needs a hostile target.\")\n        return\n    if ctx.apply_status(victim.id, \"petrified\", DURATION, source=caster):\n        ctx.log(f\"The {victim.name} hardens into solid rock!\")\n\n\ndef on_petrified_apply(ctx, status):\n    holder = ctx.entity(status.holder)\n    if holder is None:\n        return\n    ctx.log(f\"The {holder.name} is now a lifeless statue.\")\n\n\ndef on_petrified_damaged(ctx, status, amount, source):\n    holder = ctx.entity(status.holder)\n    if holder is None or amount <= 0:\n        return\n    if ctx.remove_status(status.holder, \"petrified\"):\n        ctx.log(f\"The stone shell cracks: the {holder.name} breaks free!\")\n\n\ndef on_petrified_expire(ctx, status):\n    holder = ctx.entity(status.holder)\n    if holder is None:\n        return\n    ctx.log(f\"The rock crumbles away and the {holder.name} moves again.\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to solid rock: cannot act. Any damage shatters the stone and ends it early.\",\n    prevents_action=True,\n    on_apply=on_petrified_apply,\n    on_damaged=on_petrified_damaged,\n    on_expire=on_petrified_expire,\n    appearance=\"stone_statue\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn one enemy into a stone statue for 3 turns. It cannot act, but any damage cracks the rock and frees it.\",\n    mana_cost=4,\n    cooldown=3,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"stone_statue\",\n    palette={\n        \"D\": \"#3d3f46\",\n        \"G\": \"#6d7078\",\n        \"L\": \"#b9bcc4\",\n        \"g\": \"#8b8f98\",\n        \"k\": \"#1b1c20\",\n        \"m\": \"#55585f\",\n    },\n    rows=[\n        \"................\",\n        \".....kkkkkk.....\",\n        \"....kgLLLLgk....\",\n        \"...kgLLggggGk...\",\n        \"..kgLggmggggGk..\",\n        \"..kgLgkggkggGk..\",\n        \"..kggggggggggk..\",\n        \"..kgggmmmmggGk..\",\n        \"...kggggggggk...\",\n        \"..kkgGGGGGGgkk..\",\n        \".kgLgGmggmGgGGk.\",\n        \".kggGGgggggGDGk.\",\n        \".kgGGGgggggGDGk.\",\n        \".kkGGDGgggGDDkk.\",\n        \"..kGDDDGGDDDDk..\",\n        \"..kkkkkkkkkkkk..\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-opus-5",
+   "effort": "high",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 18.1,
+    "writer_seconds": 17.2,
+    "input_tokens": 8892,
+    "cache_read_tokens": 0,
+    "output_tokens": 1401,
+    "cost_usd": 0.0903,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain Lightning arcs to the target and then leaps to the two nearest unhit enemies within 3 tiles (needing line of sight), dealing 4, then 3, then 2 damage. Priced at 4 mana with a 2-turn cooldown: it's weak on a lone target but excellent against clustered packs, and it stays relevant deeper in the dungeon since it always finds fresh targets. No sprite work needed since nothing changes appearance.",
+    "source": "# Chain lightning: hits the chosen enemy, then arcs to nearby unhit enemies,\n# losing power with each jump.\n\nDAMAGES = [4, 3, 2]\nJUMP_RANGE = 3\n\n\ndef find_next(ctx, from_pos, caster_faction, hit_ids):\n    best = None\n    best_key = None\n    for other in ctx.entities_in_radius(from_pos, JUMP_RANGE):\n        if other.faction == caster_faction:\n            continue\n        if other.id in hit_ids:\n            continue\n        if not ctx.has_line_of_sight(from_pos, other.pos):\n            continue\n        key = (from_pos.distance_to(other.pos), other.id)\n        if best_key is None or key < best_key:\n            best = other\n            best_key = key\n    return best\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    victim = ctx.entity_at(target)\n    if victim is None or victim.faction == me.faction:\n        ctx.log(\"The lightning crackles away into nothing.\")\n        return\n\n    hit_ids = set()\n    current_pos = victim.pos\n    current_id = victim.id\n    jumps = 0\n\n    for index, amount in enumerate(DAMAGES):\n        if current_id is None:\n            break\n        creature = ctx.entity(current_id)\n        if creature is None:\n            break\n        current_pos = creature.pos\n        hit_ids.add(current_id)\n        jumps = index + 1\n        ctx.damage(current_id, amount, source=caster)\n        if index + 1 < len(DAMAGES):\n            nxt = find_next(ctx, current_pos, me.faction, hit_ids)\n            if nxt is None:\n                current_id = None\n            else:\n                current_id = nxt.id\n\n    if jumps == 1:\n        ctx.log(\"Lightning strikes, but finds nothing else to leap to.\")\n    else:\n        ctx.log(f\"The lightning arcs through {jumps} foes!\")\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"A bolt strikes one enemy for 4 damage, then leaps to up to two more nearby enemies for 3 and 2 damage.\",\n    mana_cost=4,\n    cooldown=2,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n"
+   }
+  },
+  {
+   "model": "claude-opus-5",
+   "effort": "high",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 31.8,
+    "writer_seconds": 31.2,
+    "input_tokens": 8887,
+    "cache_read_tokens": 0,
+    "output_tokens": 2615,
+    "cost_usd": 0.1207,
+    "spell": "Summon Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Casting on a nearby tile calls up a spectral wolf ally (7 HP, 3 damage) that hunts the closest enemy on its own \u2014 it's fast, taking two steps when closing distance \u2014 and fades away after 5 of its turns via a timed status. Costed at 4 mana with a 5-turn cooldown so you can keep one wolf at a time, and it can be killed early like any creature.",
+    "source": "# Summons a short-lived spectral wolf ally. The wolf hunts the nearest enemy and\n# fades away when its binding status expires.\n\nSUMMON_TURNS = 5\nHUNT_RANGE = 9\n\n\ndef pick_tile(ctx, caster, target):\n    if ctx.is_walkable(target):\n        return target\n    options = [pos for pos in target.neighbors() if ctx.is_walkable(pos)]\n    if options:\n        return ctx.choice(options)\n    me = ctx.entity(caster)\n    if me is None:\n        return None\n    options = [pos for pos in me.pos.neighbors() if ctx.is_walkable(pos)]\n    if options:\n        return ctx.choice(options)\n    return None\n\n\ndef on_cast(ctx, caster, target):\n    spot = pick_tile(ctx, caster, target)\n    if spot is None:\n        ctx.log(\"There is no room for the spirit wolf to appear.\")\n        return\n    wolf = ctx.spawn(\"spirit_wolf\", spot, \"player\")\n    if wolf is None:\n        ctx.log(\"The howl fades: the spirit finds no place to stand.\")\n        return\n    ctx.apply_status(wolf, \"spirit_binding\", SUMMON_TURNS, source=caster)\n    ctx.log(\"A spirit wolf howls and springs to your side!\")\n\n\ndef on_binding_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is None:\n        return\n    ctx.log(\"The spirit wolf dissolves into pale mist.\")\n    ctx.damage(status.holder, wolf.hp + 1)\n\n\ndef act(ctx, me):\n    for step in range(2):\n        body = ctx.entity(me)\n        if body is None:\n            return\n        target = ctx.nearest_hostile(me, max_distance=HUNT_RANGE)\n        if target is None:\n            if step == 0 and ctx.chance(0.5):\n                player = ctx.player()\n                if player is not None and body.pos.distance_to(player.pos) > 2:\n                    ctx.step_toward(me, player.pos)\n            return\n        if body.pos.distance_to(target.pos) == 1:\n            ctx.attack(me, target.id)\n            return\n        if not ctx.step_toward(me, target.pos):\n            return\n\n\ndefine_status(\n    id=\"spirit_binding\",\n    name=\"Spirit Binding\",\n    description=\"This summoned spirit fades from the world when the binding ends.\",\n    on_expire=on_binding_expire,\n    appearance=\"spirit_wolf\",\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A pale, swift hound of the spirit world, bound to a summoner for a short while.\",\n    glyph=\"w\",\n    max_hp=7,\n    attack=3,\n    act=act,\n    sprite=\"spirit_wolf\",\n)\n\ndefine_spell(\n    id=\"summon_spirit_wolf\",\n    name=\"Summon Spirit Wolf\",\n    description=\"Call a spectral wolf (7 HP, 3 damage) to a nearby tile. It hunts your enemies for 5 turns, then fades.\",\n    mana_cost=4,\n    cooldown=5,\n    target=\"tile\",\n    range=3,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"spirit_wolf\",\n    palette={\n        \"B\": \"#2a4a6e\",\n        \"C\": \"#7fd8ff\",\n        \"W\": \"#e8fbff\",\n        \"b\": \"#3f7fb0\",\n        \"k\": \"#0d1a2a\",\n        \"w\": \"#b6ecff\",\n    },\n    rows=[\n        \"................\",\n        \"..k..........k..\",\n        \".kCk........kCk.\",\n        \".kCCk......kCCk.\",\n        \".kCWCkkkkkkCWCk.\",\n        \".kCWWWWWWWWWWCk.\",\n        \"..kCWkCWWCkWCk..\",\n        \"...kCWWWWWWCk...\",\n        \"....kCWkkWCkk...\",\n        \"...kbCWWWWCbbk..\",\n        \"..kbCwwwwwwCbbk.\",\n        \".kBbCwwwwwwwCbBk\",\n        \".kBbbCwwwwwwCbk.\",\n        \"..kBbkCwwCkbBk..\",\n        \"...kBk.kCk.kBk..\",\n        \"....k...k...k...\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-opus-5",
+   "effort": "low",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 18.9,
+    "writer_seconds": 18.1,
+    "input_tokens": 8880,
+    "cache_read_tokens": 0,
+    "output_tokens": 1436,
+    "cost_usd": 0.0912,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify targets one enemy for 3 turns with a stone-grey sprite; since a total lockdown is strong I gave it a 4-mana cost, cooldown 3, and no damage, plus the stone shatters early (status ends) if you hit it hard enough (damage >= 4).",
+    "source": "# Turns a single enemy into an inert rock for a few turns.\n\nPETRIFY_TURNS = 3\nSHATTER_THRESHOLD = 4\n\n\ndef on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The stony magic washes over bare floor.\")\n        return\n    me = ctx.entity(caster)\n    if me is not None and victim.faction == me.faction:\n        ctx.log(\"You refuse to petrify an ally.\")\n        return\n    ctx.apply_status(victim.id, \"petrified\", PETRIFY_TURNS, source=caster)\n\n\ndef on_apply(ctx, status):\n    holder = ctx.entity(status.holder)\n    if holder is not None:\n        ctx.log(f\"The {holder.name} hardens into solid rock!\")\n\n\ndef on_expire(ctx, status):\n    holder = ctx.entity(status.holder)\n    if holder is not None:\n        ctx.log(f\"The {holder.name} sheds its stone shell.\")\n\n\ndef on_damaged(ctx, status, amount, source):\n    if amount >= SHATTER_THRESHOLD:\n        holder = ctx.entity(status.holder)\n        if holder is not None:\n            ctx.remove_status(status.holder, \"petrified\")\n            ctx.log(f\"The stone around the {holder.name} cracks apart!\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to solid rock: cannot act. A heavy blow (4+ damage) shatters the stone early.\",\n    prevents_action=True,\n    on_apply=on_apply,\n    on_expire=on_expire,\n    on_damaged=on_damaged,\n    appearance=\"petrified_rock\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn one enemy into a helpless rock for 3 turns. A hit of 4 or more damage breaks the stone early.\",\n    mana_cost=4,\n    cooldown=3,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"petrified_rock\",\n    palette={\n        \"k\": \"#2b2b30\",\n        \"d\": \"#55555e\",\n        \"g\": \"#7a7a85\",\n        \"l\": \"#9fa0ab\",\n        \"w\": \"#c5c6ce\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \".....kkkkk......\",\n        \"....kwlllgkk....\",\n        \"...kwllgggdgk...\",\n        \"..kwlggggdddgk..\",\n        \"..kllggkdddddk..\",\n        \".kllgggkkgdddgk.\",\n        \".klgggggkgddddk.\",\n        \"kwlgggggggdddgk.\",\n        \"klggggkggggdddk.\",\n        \"klgggkkkggdddddk\",\n        \"kdgggggkgddddddk\",\n        \"kddggggggdddddkk\",\n        \".kdddddddddddk..\",\n        \"..kkkkkkkkkkk...\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-opus-5",
+   "effort": "low",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 12.4,
+    "writer_seconds": 11.6,
+    "input_tokens": 8892,
+    "cache_read_tokens": 0,
+    "output_tokens": 892,
+    "cost_usd": 0.0776,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain Lightning strikes your target for 4, then arcs to up to two more nearby enemies for 3 and 2, never hitting the same creature twice. Jumps need line of sight and a 3-tile hop; 4 mana with a short cooldown keeps its multi-target burst in check.",
+    "source": "# Chain lightning: hits the targeted creature, then arcs to nearby unhit enemies,\n# losing power with every jump.\n\nDAMAGES = [4, 3, 2]\nJUMP_RANGE = 3\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    victim = ctx.entity_at(target)\n    if victim is None or victim.faction == me.faction:\n        ctx.log(\"The lightning crackles harmlessly into the floor.\")\n        return\n\n    hit_ids = []\n    current = victim\n    for index in range(len(DAMAGES)):\n        if current is None:\n            break\n        pos = current.pos\n        ctx.damage(current.id, DAMAGES[index], source=caster)\n        hit_ids.append(current.id)\n        if index + 1 >= len(DAMAGES):\n            break\n        current = pick_next(ctx, me, pos, hit_ids)\n        if current is not None:\n            ctx.log(f\"The arc leaps to the {current.name}!\")\n\n    if len(hit_ids) == 1:\n        ctx.log(\"The bolt finds no second target.\")\n\n\ndef pick_next(ctx, me, pos, hit_ids):\n    best = None\n    best_dist = 99\n    for other in ctx.entities_in_radius(pos, JUMP_RANGE):\n        if other.id in hit_ids or other.faction == me.faction:\n            continue\n        if not ctx.has_line_of_sight(pos, other.pos):\n            continue\n        dist = pos.distance_to(other.pos)\n        if dist < best_dist:\n            best = other\n            best_dist = dist\n    return best\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"A bolt strikes one enemy for 4 damage, then arcs to up to two more nearby enemies for 3 and 2 damage.\",\n    mana_cost=4,\n    cooldown=2,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n"
+   }
+  },
+  {
+   "model": "claude-opus-5",
+   "effort": "low",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 19.1,
+    "writer_seconds": 18.3,
+    "input_tokens": 8887,
+    "cache_read_tokens": 8690,
+    "output_tokens": 1639,
+    "cost_usd": 0.0463,
+    "spell": "Summon Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "The wolf is a summoned ally (7 HP, 3 damage) that hunts the nearest enemy; a 'spirit bond' status counts down its own 5 turns and then the wolf fades away. Cost 4 mana with a 5-turn cooldown so you can't keep a permanent pack.",
+    "source": "# Summons a temporary spirit wolf ally. The wolf carries a timed status that\n# dissolves it when the bond runs out.\n\nDURATION = 5\n\n\ndef act(ctx, me):\n    wolf = ctx.entity(me)\n    if wolf is None:\n        return\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        player = ctx.player()\n        if player is not None and wolf.pos.distance_to(player.pos) > 2:\n            ctx.step_toward(me, player.pos)\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndef on_bond_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is None:\n        return\n    ctx.log(\"The spirit wolf fades back into the mist.\")\n    ctx.damage(status.holder, wolf.hp + 1)\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    spots = []\n    if ctx.is_walkable(target):\n        spots.append(target)\n    for pos in target.neighbors():\n        if ctx.is_walkable(pos):\n            spots.append(pos)\n    for pos in spots:\n        wolf_id = ctx.spawn(\"spirit_wolf\", pos, \"player\")\n        if wolf_id is not None:\n            ctx.apply_status(wolf_id, \"spirit_bond\", DURATION, source=caster)\n            ctx.log(\"A spirit wolf howls at your side!\")\n            return\n    ctx.log(\"There is no room for the spirit wolf to form.\")\n\n\ndefine_status(\n    id=\"spirit_bond\",\n    name=\"Spirit Bond\",\n    description=\"Held in this world by magic; fades when the bond ends.\",\n    on_expire=on_bond_expire,\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A translucent wolf called from the spirit world.\",\n    glyph=\"w\",\n    max_hp=7,\n    attack=3,\n    act=act,\n    sprite=\"spirit_wolf\",\n)\n\ndefine_spell(\n    id=\"summon_spirit_wolf\",\n    name=\"Summon Spirit Wolf\",\n    description=\"Call a spirit wolf (7 HP, 3 damage) that fights beside you for 5 turns before fading.\",\n    mana_cost=4,\n    cooldown=5,\n    target=\"tile\",\n    range=4,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"spirit_wolf\",\n    palette={\n        \"k\": \"#0e1a2a\",\n        \"b\": \"#4a7fbf\",\n        \"c\": \"#8fd4ff\",\n        \"w\": \"#d8f2ff\",\n        \"e\": \"#ffffff\",\n    },\n    rows=[\n        \"................\",\n        \"..k..........k..\",\n        \".kck........kck.\",\n        \".kbck......kcbk.\",\n        \".kbbckkkkkcbbk..\",\n        \"..kbcwwwwwwcbk..\",\n        \"..kbcwewwewcbk..\",\n        \"..kbcwwwwwwwck..\",\n        \"...kbcwkkwcbk...\",\n        \"...kbbcwwcbbk...\",\n        \"..kbbbbccbbbbk..\",\n        \".kbbcccccccbbbk.\",\n        \".kbbk.kbbk.kbbk.\",\n        \"..kbk..kbk..kck.\",\n        \"..kck..kck...k..\",\n        \"...k....k.......\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "medium",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 13.5,
+    "writer_seconds": 12.9,
+    "input_tokens": 8880,
+    "cache_read_tokens": 0,
+    "output_tokens": 1280,
+    "cost_usd": 0.0349,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify turns a single enemy into a stone statue for 3 turns (it can't act, but also can't be interrupted early) and gives it a rocky sprite while affected. Costs 4 mana with a 3-turn cooldown to keep long single-target stun-locks from trivializing fights, and it can't be reapplied to refresh a shorter duration mid-fight (well, technically it takes the longer of the two).",
+    "source": "DURATION = 3\n\n\ndef on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The petrifying ray finds no target.\")\n        return\n    me = ctx.entity(caster)\n    if me is not None and victim.faction == me.faction:\n        ctx.log(\"You can't petrify an ally.\")\n        return\n    if ctx.apply_status(victim.id, \"petrified\", DURATION, source=caster):\n        ctx.log(f\"The {victim.name} turns to stone!\")\n\n\ndef on_apply(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} is frozen in stone.\")\n\n\ndef on_expire(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} crumbles back to life.\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to stone: cannot act.\",\n    prevents_action=True,\n    on_apply=on_apply,\n    on_expire=on_expire,\n    appearance=\"petrified_rock\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn an enemy to stone for 3 turns, preventing it from acting.\",\n    mana_cost=4,\n    cooldown=3,\n    target=\"entity\",\n    range=5,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"petrified_rock\",\n    palette={\n        \"g\": \"#6b6b6b\",\n        \"G\": \"#8a8a8a\",\n        \"d\": \"#4a4a4a\",\n        \"D\": \"#3a3a3a\",\n        \"k\": \"#1e1e1e\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \"................\",\n        \".....dddddd.....\",\n        \"....dGGGGGGd....\",\n        \"...dGgggggggd...\",\n        \"..dGgggGGgggGd..\",\n        \".dGggGGGGGGggGd.\",\n        \".dgggGGGGGGgggd.\",\n        \"dggggGGGGGGggggd\",\n        \".dgggGGGGGGgggd.\",\n        \".dGggggggggGgd..\",\n        \"..dGGdddddGGd...\",\n        \"...dDDDDDDDd....\",\n        \"....dDDDDDd.....\",\n        \".....kkkkk......\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "medium",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 18.4,
+    "writer_seconds": 17.5,
+    "input_tokens": 8892,
+    "cache_read_tokens": 0,
+    "output_tokens": 1679,
+    "cost_usd": 0.0389,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain Lightning jumps from the targeted enemy to up to two more nearby foes (within 3 tiles), losing power each jump (6 \u2192 4 \u2192 2 damage). Range 6 to the first target, small cooldown to keep it from outshining Firebolt on single targets while punishing grouped enemies.",
+    "source": "DAMAGES = [6, 4, 2]\nJUMP_RANGE = 3\n\n\ndef on_cast(ctx, caster, target):\n    caster_view = ctx.entity(caster)\n    if caster_view is None:\n        return\n    victim = ctx.entity_at(target)\n    if victim is None or victim.faction == caster_view.faction:\n        ctx.log(\"The lightning finds no target.\")\n        return\n\n    hit_ids = set()\n    current = victim\n    jumps = 0\n    for dmg in DAMAGES:\n        if current is None:\n            break\n        ctx.damage(current.id, dmg, source=caster)\n        hit_ids.add(current.id)\n        jumps += 1\n\n        refreshed = ctx.entity(current.id)\n        from_pos = refreshed.pos if refreshed is not None else current.pos\n\n        candidates = []\n        for e in ctx.entities_in_radius(from_pos, JUMP_RANGE):\n            if e.faction == caster_view.faction:\n                continue\n            if e.id in hit_ids:\n                continue\n            candidates.append(e)\n\n        if not candidates:\n            current = None\n        else:\n            candidates.sort(key=lambda e: (from_pos.distance_to(e.pos), e.id))\n            current = candidates[0]\n\n    if jumps == 1:\n        ctx.log(\"The lightning strikes once and fizzles out.\")\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"A bolt of lightning strikes the target for 6 damage, then arcs to up to two more nearby enemies for 4 and 2 damage.\",\n    mana_cost=4,\n    target=\"entity\",\n    range=6,\n    cooldown=3,\n    on_cast=on_cast,\n)\n"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "medium",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 17.0,
+    "writer_seconds": 16.1,
+    "input_tokens": 8887,
+    "cache_read_tokens": 8690,
+    "output_tokens": 1677,
+    "cost_usd": 0.0189,
+    "spell": "Summon Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "I made this a temporary ally: casting it summons a Spirit Wolf next to you that chases and attacks enemies for 5 of its own turns, then dissolves into mist. Kept it at 8 HP / 4 attack so it's helpful but not a permanent army, and gave the spell a cooldown so you can't keep two out at once.",
+    "source": "DURATION = 5\n\n\ndef act(ctx, me):\n    wolf = ctx.entity(me)\n    if wolf is None:\n        return\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndef on_fade_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is None or not wolf.alive:\n        return\n    ctx.damage(status.holder, 999, source=None)\n    ctx.log(\"The spirit wolf fades away into mist.\")\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    spot = None\n    for pos in me.pos.neighbors():\n        if ctx.is_walkable(pos):\n            spot = pos\n            break\n    if spot is None:\n        ctx.log(\"There is no room to summon the wolf.\")\n        return\n    wolf_id = ctx.spawn(\"spirit_wolf\", spot, faction=\"player\")\n    if wolf_id is None:\n        ctx.log(\"The summoning fails.\")\n        return\n    ctx.apply_status(wolf_id, \"spirit_bound\", DURATION, source=caster)\n    ctx.log(\"A spirit wolf answers your call!\")\n\n\ndefine_status(\n    id=\"spirit_bound\",\n    name=\"Spirit Bound\",\n    description=\"This spirit's time in the world is limited.\",\n    on_expire=on_fade_expire,\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A translucent wolf summoned to fight at your side for a short time.\",\n    glyph=\"w\",\n    max_hp=8,\n    attack=4,\n    act=act,\n    sprite=\"spirit_wolf\",\n)\n\ndefine_sprite(\n    id=\"spirit_wolf\",\n    palette={\n        \"b\": \"#bcd7ff\",\n        \"c\": \"#7fa8e8\",\n        \"d\": \"#eaf3ff\",\n        \"e\": \"#0d1b33\",\n        \"k\": \"#16233d\",\n        \"w\": \"#ffffff\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \"......kk..kk....\",\n        \".....kbbk.kbk...\",\n        \"....kbbbkkbbbk..\",\n        \"...kbbbbbbbbbk..\",\n        \"..kbbcccccccbbk.\",\n        \".kbbccbbbbccbbk.\",\n        \".kbbccdeedbccbk.\",\n        \".kbbcccbbcccbbk.\",\n        \"..kbbbccccbbbk..\",\n        \"..kkbbbbbbbbkk..\",\n        \"...kkbbbbbbkk...\",\n        \"....kk.kk.kk....\",\n        \"....kk..k.kk....\",\n        \"................\",\n    ],\n)\n\ndefine_spell(\n    id=\"summon_spirit_wolf\",\n    name=\"Summon Spirit Wolf\",\n    description=\"Summon a spectral wolf that fights beside you for 5 turns before fading away.\",\n    mana_cost=5,\n    cooldown=6,\n    target=\"self\",\n    on_cast=on_cast,\n)"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "low",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 11.6,
+    "writer_seconds": 10.8,
+    "input_tokens": 8880,
+    "cache_read_tokens": 0,
+    "output_tokens": 1097,
+    "cost_usd": 0.0331,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [],
+    "notes": "Petrify turns a single enemy to stone: it can't act for 3 turns and is drawn as a rock, but it also can't be attacked normally to keep it non-abusable... actually to keep balance it still takes damage normally, so you can combo it with other spells while it's helpless. Single-target, moderate cost with cooldown so it can't be permanent lockdown.",
+    "source": "def on_cast(ctx, caster, target):\n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The petrifying ray hits nothing.\")\n        return\n    me = ctx.entity(caster)\n    if victim.faction == me.faction:\n        ctx.log(\"That is not hostile.\")\n        return\n    if ctx.apply_status(victim.id, \"petrified\", 3, source=caster):\n        ctx.log(f\"The {victim.name} turns to stone!\")\n\n\ndef on_petrified_apply(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} is now a rock.\")\n\n\ndef on_petrified_expire(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} crumbles back to life.\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to stone: cannot act for a few turns.\",\n    prevents_action=True,\n    on_apply=on_petrified_apply,\n    on_expire=on_petrified_expire,\n    appearance=\"petrified_rock\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn a single enemy into stone, preventing it from acting for 3 turns.\",\n    mana_cost=5,\n    cooldown=5,\n    target=\"entity\",\n    range=6,\n    on_cast=on_cast,\n)\n\n\ndefine_sprite(\n    id=\"petrified_rock\",\n    palette={\n        \"g\": \"#7a7a7a\",\n        \"G\": \"#5c5c5c\",\n        \"k\": \"#2b2b2b\",\n        \"h\": \"#9a9a9a\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \"................\",\n        \"................\",\n        \".....kkkkkk.....\",\n        \"...kkgggggkk....\",\n        \"..kgGgggggGgk...\",\n        \".kgggGhhhGgggk..\",\n        \".kgGhhhhhhGggk..\",\n        \".kggGhhhhGgggk..\",\n        \"..kggGGGGgggk...\",\n        \"..kgggggggggk...\",\n        \"...kkgggggkk....\",\n        \"....kkkkkkk.....\",\n        \"................\",\n        \"................\",\n    ],\n)\n"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "low",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 8.2,
+    "writer_seconds": 7.3,
+    "input_tokens": 8892,
+    "cache_read_tokens": 0,
+    "output_tokens": 788,
+    "cost_usd": 0.03,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain Lightning strikes the nearest enemy within range for 6, then jumps up to 2 more times to the nearest not-yet-hit enemy within 3 tiles, dealing 4 then 2 damage. No status/appearance needed since nothing changes look.",
+    "source": "DAMAGES = [6, 4, 2]\nJUMP_RANGE = 3\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    if me is None:\n        return\n    first = ctx.entity_at(target)\n    if first is None or first.faction == me.faction:\n        first = ctx.nearest_hostile(caster, max_distance=7)\n    if first is None:\n        ctx.log(\"The lightning finds no target.\")\n        return\n    hit_ids = []\n    current = first\n    for dmg in DAMAGES:\n        if current is None:\n            break\n        ctx.damage(current.id, dmg, source=caster)\n        hit_ids.append(current.id)\n        last_pos = current.pos\n        nxt = None\n        best_dist = None\n        for other in ctx.entities_in_radius(last_pos, JUMP_RANGE):\n            if other.id in hit_ids:\n                continue\n            if other.faction == me.faction:\n                continue\n            d = last_pos.distance_to(other.pos)\n            if best_dist is None or d < best_dist:\n                best_dist = d\n                nxt = other\n        current = nxt\n    ctx.log(\"Lightning arcs between the enemies!\")\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"Bolts of lightning strike the nearest enemy for 6 damage, then jump up to 2 more times to nearby enemies, dealing 4 then 2 damage.\",\n    mana_cost=5,\n    target=\"tile\",\n    range=7,\n    cooldown=3,\n    on_cast=on_cast,\n)\n"
+   }
+  },
+  {
+   "model": "claude-sonnet-5",
+   "effort": "low",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 2,
+    "seconds": 27.5,
+    "writer_seconds": 25.7,
+    "input_tokens": 19339,
+    "cache_read_tokens": 8690,
+    "output_tokens": 2889,
+    "cost_usd": 0.0563,
+    "spell": "Summon Spirit Wolf",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [
+     [
+      "the plugin failed to load: sprite row 2 must be a string of 16 characters"
+     ]
+    ],
+    "notes": "Fixed the sprite row length bug that broke loading; everything else in the spell design stays the same: a temporary spirit wolf ally that fights for 5 turns.",
+    "source": "def act(ctx, me):\n    wolf = ctx.entity(me)\n    if wolf is None:\n        return\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndef on_fade_expire(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is not None and wolf.alive:\n        ctx.log(\"The spirit wolf fades away.\")\n        ctx.damage(status.holder, 999)\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    spot = None\n    for pos in me.pos.neighbors():\n        if ctx.is_walkable(pos):\n            spot = pos\n            break\n    if spot is None:\n        ctx.log(\"There is no room for the spirit wolf to appear.\")\n        return\n    wolf_id = ctx.spawn(\"spirit_wolf\", spot, faction=\"player\")\n    if wolf_id is None:\n        ctx.log(\"The spirit wolf could not manifest.\")\n        return\n    ctx.apply_status(wolf_id, \"fading\", 5, source=caster)\n    ctx.log(\"A spirit wolf howls into being!\")\n\n\ndefine_status(\n    id=\"fading\",\n    name=\"Fading\",\n    description=\"This spirit will vanish when the duration runs out.\",\n    on_expire=on_fade_expire,\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A ghostly wolf summoned to fight beside its master.\",\n    glyph=\"w\",\n    max_hp=8,\n    attack=4,\n    act=act,\n    sprite=\"spirit_wolf\",\n)\n\ndefine_sprite(\n    id=\"spirit_wolf\",\n    palette={\n        \"b\": \"#8fd6ff\",\n        \"c\": \"#e8faff\",\n        \"k\": \"#1a2733\",\n        \"w\": \"#c8ecff\",\n        \"e\": \"#ffffff\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \"................\",\n        \"....kk....kk....\",\n        \"...kwwk..kwwk...\",\n        \"..kwwwwkkwwwwk..\",\n        \".kwwwwwwwwwwwwk.\",\n        \".kwbwwwwwwbwwwk.\",\n        \".kwwweeewwwwwwk.\",\n        \".kwwwwwwwwwwwwk.\",\n        \"..kwwwwwwwwwwk..\",\n        \"...kwwwwwwwwk...\",\n        \"....kwwwwwwk....\",\n        \".....kwwwwk.....\",\n        \"......kwwk......\",\n        \".......kk.......\",\n    ],\n)\n\ndefine_spell(\n    id=\"summon_spirit_wolf\",\n    name=\"Summon Spirit Wolf\",\n    description=\"Summon a spectral wolf (8 HP, 4 attack) to fight beside you for 5 turns.\",\n    mana_cost=6,\n    cooldown=6,\n    target=\"self\",\n    on_cast=on_cast,\n)\n"
+   }
+  },
+  {
+   "model": "claude-haiku-4-5",
+   "effort": "-",
+   "idea": "turn enemies into rocks for a few turns",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 2,
+    "seconds": 17.1,
+    "writer_seconds": 15.4,
+    "input_tokens": 14942,
+    "cache_read_tokens": 6818,
+    "output_tokens": 1922,
+    "cost_usd": 0.0201,
+    "spell": "Petrify",
+    "sprites": 1,
+    "warnings": [],
+    "problems": [
+     [
+      "the plugin failed to load: palette key '.' must be one printable character, not '.'"
+     ]
+    ],
+    "notes": "Turn enemies into rocks for a few turns: they become statues with a stone appearance, skip their turns while petrified, and return to normal after 3 turns. Balanced at 4 mana with a 3-turn cooldown to prevent spamming; it's powerful crowd control but costs more than Firebolt and requires choosing between this and damage.",
+    "source": "DURATION = 3\nCOOLDOWN = 3\nRANGE = 6\nRADIUS = 2\n\n\ndef on_cast(ctx, caster, target):\n    me = ctx.entity(caster)\n    hit = 0\n    for other in ctx.entities_in_radius(target, RADIUS):\n        if other.faction == me.faction:\n            continue\n        if ctx.apply_status(other.id, \"petrified\", DURATION, source=caster):\n            hit += 1\n    if hit == 0:\n        ctx.log(\"No enemies are caught in the petrification.\")\n    else:\n        ctx.log(f\"The area turns {hit} enemy(ies) to stone!\")\n\n\ndef on_petrified_apply(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} turns to stone!\")\n\n\ndef on_petrified_expire(ctx, status):\n    victim = ctx.entity(status.holder)\n    if victim is not None:\n        ctx.log(f\"The {victim.name} cracks free from stone.\")\n\n\ndefine_status(\n    id=\"petrified\",\n    name=\"Petrified\",\n    description=\"Turned to stone: cannot act or move.\",\n    prevents_action=True,\n    on_apply=on_petrified_apply,\n    on_expire=on_petrified_expire,\n    appearance=\"petrified\",\n)\n\ndefine_spell(\n    id=\"petrify\",\n    name=\"Petrify\",\n    description=\"Turn nearby enemies to stone for 3 turns, preventing them from acting.\",\n    mana_cost=4,\n    cooldown=COOLDOWN,\n    target=\"tile\",\n    range=RANGE,\n    on_cast=on_cast,\n)\n\n\n# ---- art ----\n\ndefine_sprite(\n    id=\"petrified\",\n    palette={\n        \"S\": \"#8b8b8b\",\n        \"s\": \"#a0a0a0\",\n        \"d\": \"#707070\",\n        \"c\": \"#696969\",\n        \"k\": \"#404040\",\n        \" \": \"#000000\",\n    },\n    rows=[\n        \"                \",\n        \"                \",\n        \"       kk       \",\n        \"      kSSk      \",\n        \"     kSssSk     \",\n        \"    kSssssSk    \",\n        \"   kSddssdsSk   \",\n        \"   kSssssssSk   \",\n        \"  kSssssssssSkk \",\n        \"  kSdssdssdssk  \",\n        \"  kSssssssssSk  \",\n        \"   kSddssdsSk   \",\n        \"   kSssssssSk   \",\n        \"    kSssssSk    \",\n        \"     kSssSk     \",\n        \"      kccdk     \",\n    ],\n)"
+   }
+  },
+  {
+   "model": "claude-haiku-4-5",
+   "effort": "-",
+   "idea": "chain lightning that jumps between up to 3 enemies, weaker with each jump",
+   "result": {
+    "ok": true,
+    "error": null,
+    "attempts": 1,
+    "seconds": 7.0,
+    "writer_seconds": 6.1,
+    "input_tokens": 6974,
+    "cache_read_tokens": 6818,
+    "output_tokens": 597,
+    "cost_usd": 0.0038,
+    "spell": "Chain Lightning",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [],
+    "notes": "Chain Lightning jumps from enemy to enemy in a cascading pattern, dealing 4 damage to the first target, 2 to the second, and 1 to the third. At 5 mana it costs the same as Frost Nova but is riskier since you must target an enemy directly and the damage falls off\u2014balance against Firebolt's reliable single-target power.",
+    "source": "def on_cast(ctx, caster, target):\n    caster_entity = ctx.entity(caster)\n    if caster_entity is None:\n        return\n    \n    victim = ctx.entity_at(target)\n    if victim is None:\n        ctx.log(\"The lightning finds nothing to strike.\")\n        return\n    \n    damages = [4, 2, 1]\n    hit_ids = set()\n    current_pos = target\n    \n    for i, damage in enumerate(damages):\n        victim = ctx.entity_at(current_pos)\n        if victim is None or victim.id in hit_ids:\n            break\n        \n        if victim.faction == caster_entity.faction:\n            break\n        \n        ctx.damage(victim.id, damage, source=caster)\n        hit_ids.add(victim.id)\n        \n        if i < len(damages) - 1:\n            next_target = None\n            best_distance = float('inf')\n            for other in ctx.entities(faction='enemy'):\n                if other.id not in hit_ids:\n                    dist = current_pos.distance_to(other.pos)\n                    if dist < best_distance:\n                        best_distance = dist\n                        next_target = other\n            \n            if next_target is None:\n                break\n            current_pos = next_target.pos\n    \n    if len(hit_ids) == 0:\n        ctx.log(\"The lightning finds nothing to strike.\")\n\n\ndefine_spell(\n    id=\"chain_lightning\",\n    name=\"Chain Lightning\",\n    description=\"A bolt of electricity that jumps up to 3 enemies in succession, dealing 4 damage, then 2, then 1.\",\n    mana_cost=5,\n    target=\"entity\",\n    range=7,\n    on_cast=on_cast,\n)"
+   }
+  },
+  {
+   "model": "claude-haiku-4-5",
+   "effort": "-",
+   "idea": "summon a spirit wolf that fights beside me for 5 turns",
+   "result": {
+    "ok": false,
+    "error": "the spell kept failing its sandbox tests",
+    "attempts": 2,
+    "seconds": 40.5,
+    "writer_seconds": 38.9,
+    "input_tokens": 15167,
+    "cache_read_tokens": 13636,
+    "output_tokens": 2354,
+    "cost_usd": 0.0147,
+    "spell": "",
+    "sprites": 0,
+    "warnings": [],
+    "problems": [
+     [
+      "the plugin failed to load: sprite row 2 must be a string of 16 characters"
+     ],
+     [
+      "the plugin failed to load: sprite row 15 must be a string of 16 characters"
+     ]
+    ],
+    "notes": "Your spirit wolf is a melee ally that fights for 5 turns before fading away. It costs 6 mana to summon and has 8 HP and 2 damage, making it roughly as strong as a goblin but temporary\u2014a powerful mid-game tool when you need backup against tougher enemies. The wolf acts from the next turn after it spawns.",
+    "source": "def on_cast(ctx, caster, target):\n    caster_entity = ctx.entity(caster)\n    wolf_id = ctx.spawn(\"spirit_wolf\", caster_entity.pos, faction=\"player\")\n    if wolf_id is not None:\n        ctx.apply_status(wolf_id, \"spirit_fade\", 5, source=caster)\n        ctx.log(\"A spectral wolf materializes at your side!\")\n    else:\n        ctx.log(\"There is no room to summon the wolf.\")\n\n\ndef on_fade(ctx, status):\n    wolf = ctx.entity(status.holder)\n    if wolf is not None:\n        ctx.log(f\"The {wolf.name} fades away into the ether.\")\n\n\ndef wolf_act(ctx, me):\n    wolf = ctx.entity(me)\n    target = ctx.nearest_hostile(me, max_distance=8)\n    if target is None:\n        return\n    if wolf.pos.distance_to(target.pos) == 1:\n        ctx.attack(me, target.id)\n    else:\n        ctx.step_toward(me, target.pos)\n\n\ndefine_status(\n    id=\"spirit_fade\",\n    name=\"Spirit Fade\",\n    description=\"This spirit will fade away when the duration ends.\",\n    on_expire=on_fade,\n)\n\ndefine_monster(\n    id=\"spirit_wolf\",\n    name=\"spirit wolf\",\n    description=\"A ghostly wolf summoned to aid you in battle.\",\n    glyph=\"w\",\n    max_hp=8,\n    attack=2,\n    act=wolf_act,\n    sprite=\"spirit_wolf\",\n)\n\ndefine_sprite(\n    id=\"spirit_wolf\",\n    palette={\n        \"B\": \"#4a6fa5\",\n        \"D\": \"#2d4a7a\",\n        \"E\": \"#7a9cc6\",\n        \"F\": \"#5f7fa6\",\n        \"G\": \"#9bb8d4\",\n        \"N\": \"#1a2d4d\",\n        \"P\": \"#c0d8f0\",\n        \"S\": \"#8fa6c6\",\n        \"d\": \"#1f3a5f\",\n        \"e\": \"#5a7a9a\",\n        \"f\": \"#7a96ba\",\n        \"g\": \"#a8c4d8\",\n        \"k\": \"#0a1420\",\n        \"p\": \"#d0e4ff\",\n        \"s\": \"#7a90b0\",\n    },\n    rows=[\n        \"................\",\n        \"................\",\n        \"...kGGGkGGGk....\",\n        \"..kGgggGgggGk...\",\n        \".kGgessGsesGgk..\",\n        \".kGgPppPppPgGk..\",\n        \"kGGessppsssegGk.\",\n        \"kGGesspppssfGGk.\",\n        \"kGGfsspppssfGGk.\",\n        \".kGGfssspsfGGGk.\",\n        \".kGGfssfsfGGGk..\",\n        \"..kGfsfsfGGGk...\",\n        \"...kBBBfBBBk....\",\n        \"....kBDBDBk.....\",\n        \"....kddddddk....\",\n        \"....kkkkkkk....\",\n    ],\n)\n\ndefine_spell(\n    id=\"summon_spirit_wolf\",\n    name=\"Summon Spirit Wolf\",\n    description=\"Call forth a spectral wolf to fight at your side for 5 turns. The wolf has 8 HP and deals 2 damage per hit.\",\n    mana_cost=6,\n    target=\"self\",\n    on_cast=on_cast,\n)"
+   }
+  }
+ ]
+}

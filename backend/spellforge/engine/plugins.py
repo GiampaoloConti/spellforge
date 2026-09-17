@@ -72,6 +72,37 @@ def _check_int(value: object, what: str, low: int, high: int) -> int:
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+def _normalize_rows(rows: object) -> list[str]:
+    """Forgive small counting slips in hand-typed (or LLM-typed) pixel art.
+
+    Short rows are padded with transparent pixels, transparent overflow is trimmed and missing
+    rows are added at the top (so feet stay on the ground). Art that would lose visible pixels
+    is still rejected.
+    """
+    if not isinstance(rows, list | tuple) or not all(isinstance(r, str) for r in rows):
+        raise PluginLoadError(f"sprite rows must be a list of {SPRITE_SIZE} strings")
+    fixed: list[str] = []
+    for y, row in enumerate(rows):
+        if len(row) > SPRITE_SIZE:
+            overflow = len(row) - SPRITE_SIZE
+            if row.endswith("." * overflow):
+                row = row[:SPRITE_SIZE]
+            elif row.startswith("." * overflow):
+                row = row[overflow:]
+            else:
+                raise PluginLoadError(
+                    f"sprite row {y} has {len(row)} characters; rows must be {SPRITE_SIZE} wide"
+                )
+        fixed.append(row.ljust(SPRITE_SIZE, "."))
+    while len(fixed) > SPRITE_SIZE and set(fixed[-1]) == {"."}:
+        fixed.pop()
+    while len(fixed) > SPRITE_SIZE and set(fixed[0]) == {"."}:
+        fixed.pop(0)
+    if len(fixed) > SPRITE_SIZE:
+        raise PluginLoadError(f"sprite has {len(fixed)} rows; it must be {SPRITE_SIZE} tall")
+    return ["." * SPRITE_SIZE] * (SPRITE_SIZE - len(fixed)) + fixed
+
+
 def _check_sprite_ref(value: object, what: str) -> str | None:
     if value is None:
         return None
@@ -245,22 +276,18 @@ def make_namespace(plugin: Plugin) -> dict[str, Any]:
         darker shade on the bottom-right.
         """
         sprite_id = _check_id(id, "sprite")
-        if not isinstance(palette, dict) or not 1 <= len(palette) <= MAX_SPRITE_COLORS:
-            raise PluginLoadError(f"sprite palette must be a dict of 1-{MAX_SPRITE_COLORS} colors")
+        if not isinstance(palette, dict):
+            raise PluginLoadError("sprite palette must be a dict of characters to colors")
+        palette = {key: color for key, color in palette.items() if key != "."}  # always clear
+        if not 1 <= len(palette) <= MAX_SPRITE_COLORS:
+            raise PluginLoadError(f"sprite palette must have 1-{MAX_SPRITE_COLORS} colors")
         for key, color in palette.items():
-            if not isinstance(key, str) or len(key) != 1 or key == "." or not key.isprintable():
-                raise PluginLoadError(
-                    f"palette key {key!r} must be one printable character, not '.'"
-                )
+            if not isinstance(key, str) or len(key) != 1 or not key.isprintable():
+                raise PluginLoadError(f"palette key {key!r} must be one printable character")
             if not isinstance(color, str) or not HEX_COLOR.match(color):
                 raise PluginLoadError(f"palette color {color!r} must look like '#1a2b3c'")
-        if not isinstance(rows, list | tuple) or len(rows) != SPRITE_SIZE:
-            raise PluginLoadError(f"sprite rows must be a list of {SPRITE_SIZE} strings")
+        rows = _normalize_rows(rows)
         for y, row in enumerate(rows):
-            if not isinstance(row, str) or len(row) != SPRITE_SIZE:
-                raise PluginLoadError(
-                    f"sprite row {y} must be a string of {SPRITE_SIZE} characters"
-                )
             unknown = sorted({ch for ch in row if ch != "." and ch not in palette})
             if unknown:
                 raise PluginLoadError(
