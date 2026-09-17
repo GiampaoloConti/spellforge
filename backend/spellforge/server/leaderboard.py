@@ -5,8 +5,8 @@ housemates share one, phones change theirs, and the host's proxy hides it). Name
 optional and can be set after a run. Runs are recorded by the server when the game ends, so
 scores cannot be forged by the client; runs that used dev tools are not recorded.
 
-Storage: `SPELLFORGE_DATA_DIR` names a directory (on Hugging Face, a Storage Bucket mounted as
-a volume). Without it, or if the directory cannot be written, the leaderboard lives in memory
+Storage: the directory named by `SPELLFORGE_DATA_DIR`, or else a writable volume mounted at
+`/data` (on Hugging Face, a Storage Bucket). Without either, the leaderboard lives in memory
 and resets when the server restarts.
 """
 
@@ -27,6 +27,8 @@ FILE_NAME = "leaderboard.json"
 MAX_NAME_LENGTH = 20
 MAX_PLAYERS = 5000
 TOP_SIZE = 10
+MOUNTED_VOLUME = Path("/data")
+"""Where a Hugging Face Storage Bucket is mounted; used automatically when present."""
 
 
 class InvalidName(ValueError):
@@ -75,11 +77,19 @@ class Leaderboard:
         self._load()
 
     @classmethod
-    def from_env(cls) -> Leaderboard:
+    def from_env(cls, mounted_volume: Path = MOUNTED_VOLUME) -> Leaderboard:
+        """SPELLFORGE_DATA_DIR if set, else a volume mounted at /data, else memory only."""
         raw = os.environ.get("SPELLFORGE_DATA_DIR", "").strip()
-        if not raw:
-            logger.warning("SPELLFORGE_DATA_DIR is not set: the leaderboard resets on restart")
-        return cls(Path(raw) if raw else None)
+        if raw:
+            data_dir: Path | None = Path(raw)
+        elif mounted_volume.is_dir() and os.access(mounted_volume, os.W_OK):
+            data_dir = mounted_volume
+        else:
+            data_dir = None
+            logger.warning("no data directory: the leaderboard resets when the server restarts")
+        if data_dir is not None:
+            logger.info("leaderboard saved in %s", data_dir / FILE_NAME)
+        return cls(data_dir)
 
     # ---- updates -----------------------------------------------------------------
 

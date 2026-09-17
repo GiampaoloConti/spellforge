@@ -166,3 +166,13 @@ def test_runs_with_dev_tools_are_not_recorded():
 def test_bad_identities_are_rejected():
     reply = run(Client().send({"type": "identify", "player_id": "../../etc", "name": None}))
     assert reply["type"] == "error" and "player_id" in reply["message"]
+
+
+def test_a_mounted_volume_is_used_without_configuration(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPELLFORGE_DATA_DIR", raising=False)
+    board = Leaderboard.from_env(mounted_volume=tmp_path)
+    board.record(ALICE, a_run(2))
+    assert (tmp_path / FILE_NAME).exists()
+    assert Leaderboard.from_env(mounted_volume=tmp_path / "missing").path is None
+    monkeypatch.setenv("SPELLFORGE_DATA_DIR", str(tmp_path / "chosen"))
+    assert Leaderboard.from_env(mounted_volume=tmp_path).path == tmp_path / "chosen" / FILE_NAME

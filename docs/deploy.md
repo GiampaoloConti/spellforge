@@ -72,9 +72,9 @@ few kilobytes, well within the free storage allowance.
    it e.g. `spellforge-data`, **private**.
 2. In the Space's **Settings**, attach the bucket as a volume mounted at `/data`,
    **read-write**.
-3. In **Settings → Variables and secrets**, add the variable `SPELLFORGE_DATA_DIR` = `/data`.
 
-The Space restarts. After the first death, `leaderboard.json` appears in the bucket. Without
+That's all: the server saves the leaderboard in `/data` whenever something is mounted there
+(the `SPELLFORGE_DATA_DIR` variable is only needed for a different folder). The Space restarts. After the first death, `leaderboard.json` appears in the bucket. Without
 these steps the leaderboard still works but starts empty after each restart; if the folder
 cannot be written, the Space's *Logs* say so.
 
