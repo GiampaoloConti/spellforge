@@ -50,7 +50,16 @@ class ActionMessage(_Message):
     action: ActionPayload
 
 
-ClientMessage = Annotated[NewGameMessage | ActionMessage, Field(discriminator="type")]
+class InventMessage(_Message):
+    """Ask the forge to write a new spell from the player's description."""
+
+    type: Literal["invent"]
+    idea: str = Field(min_length=3, max_length=300)
+
+
+ClientMessage = Annotated[
+    NewGameMessage | ActionMessage | InventMessage, Field(discriminator="type")
+]
 client_message = TypeAdapter(ClientMessage)
 
 MAX_MESSAGE_BYTES = 4096
@@ -72,3 +81,17 @@ def state_message(game: Game, events: list[Event], log: list[str]) -> dict[str, 
 def error_message(message: str) -> dict[str, Any]:
     """Something was rejected. The game state is unchanged."""
     return {"type": "error", "message": message}
+
+
+def welcome_message(forge_available: bool, forge_status: str) -> dict[str, Any]:
+    """Sent once when a client connects."""
+    return {"type": "welcome", "forge_available": forge_available, "forge_status": forge_status}
+
+
+def forge_message(status: str, message: str, **fields: Any) -> dict[str, Any]:
+    """Progress of a spell being forged, pushed while the game keeps running.
+
+    status: "started" | "working" | "done" | "failed". "done" carries the new spell, its
+    source code and the updated game state.
+    """
+    return {"type": "forge", "status": status, "message": message, **fields}
