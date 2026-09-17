@@ -12,7 +12,8 @@ import json
 
 import anthropic
 
-from spellforge.agents.llm import AgentConfig, ProgressNote, Usage, validated_call
+from spellforge.agents.budget import budget_text
+from spellforge.agents.llm import AgentConfig, AgentError, ProgressNote, Usage, validated_call
 from spellforge.agents.prompts import capabilities, game_facts
 from spellforge.agents.specs import Change, MonsterReview, MonsterSpec, SpellReview, SpellSpec
 from spellforge.engine.game import PLAYER_MAX_MANA
@@ -20,19 +21,13 @@ from spellforge.engine.game import PLAYER_MAX_MANA
 SPELL_BUDGET = f"""\
 - Mana cost is 1-{PLAYER_MAX_MANA}. Mana regenerates 1 per turn, so a cooldown-0 spell can \
 be cast about once every `mana_cost` turns in a long fight.
-- Direct damage, single target: at most 2 x mana_cost per cast (Firebolt: 3 mana, 5 damage). \
-Add up to +1 damage per 2 turns of cooldown.
-- Area damage: at most 1 x mana_cost per creature hit, radius at most 2 unless the cooldown \
-is 5 or more.
-- Damage over time counts in full (amount x duration) towards the same limits.
-- Turn-skipping control (stun, freeze, sleep, polymorph, petrify): at most 3 turns on one \
-target; at most 2 turns in an area, and then cooldown at least 4.
-- Healing: at most 1.5 x mana_cost per cast, including over time.
-- Summons: allies with HP at most 4 + 2 x mana_cost, attack at most 3, at most 2 per cast, \
-lasting at most 8 turns (use a status that kills the summon on expiry) or with cooldown at \
-least 6.
-- Nothing kills outright, ignores the rules above through a percentage, or lasts forever \
-without a real cost."""
+{budget_text()}
+- Single-target direct damage should stay near 2 x mana_cost (Firebolt: 3 mana, 5 damage).
+- Turn-skipping control: at most 3 turns on one target; at most 2 turns in an area, with \
+cooldown at least 4.
+- Summons: at most 2 per cast, attack at most 3, lasting at most 8 turns (a status that \
+removes them on expiry) or with cooldown at least 6.
+- Nothing kills outright or scales with max HP (no percentages)."""
 
 SPELL_EXPLOITS = """\
 - Re-casting to stack durations or effects. Chain reactions that never end (effects that \
@@ -40,7 +35,10 @@ trigger themselves). Area effects that also hit the caster or allies (fine only 
 - Cheap spam: low cost and no cooldown with strong effects.
 - Permanent control: turn-skipping that can be refreshed before it ends.
 - Summons that never expire or multiply.
-- Numbers far above the built-in spells for the same mana."""
+- Numbers far above the built-in spells for the same mana.
+- Combos with the player's other spells: strong healing plus strong area damage lets the \
+player win every fight without risk. If the player already has healing, keep new healing \
+small or expensive; if they already have area damage, keep new area damage small."""
 
 MONSTER_BUDGET = """\
 Budget for a monster first appearing at depth D:
@@ -160,7 +158,10 @@ class Balancer:
         spec: SpellSpec,
         known_spells: list[str],
         on_progress: ProgressNote | None = None,
+        measurements: list[str] | None = None,
     ) -> tuple[SpellReview, Usage]:
+        """Review a spec. With `measurements` (from the balance probe), the spec was already
+        implemented and measured over budget: the Balancer must adjust it."""
         known = "\n".join(f"- {line}" for line in known_spells) or "- (none)"
         prompt = f"""\
 Spell spec to review:
@@ -170,6 +171,14 @@ Spell spec to review:
 
 The player already has these spells (consider combos):
 {known}"""
+        if measurements:
+            listed = "\n".join(f"- {m}" for m in measurements)
+            prompt += f"""
+
+This spec was implemented and cast in the balance arena, and it measured OVER BUDGET:
+{listed}
+
+Adjust the spec (verdict "adjust") so it fits the limits, keeping the fantasy, or reject it."""
         review, reply = await validated_call(
             self.client,
             self.config,
@@ -180,6 +189,8 @@ The player already has these spells (consider combos):
             on_progress=on_progress,
         )
         if review.verdict == "approve":
+            if measurements:
+                raise AgentError("the Balancer could not bring the spell within budget")
             review = review.model_copy(update={"spec": spec, "changes": []})
         return review, reply.usage
 

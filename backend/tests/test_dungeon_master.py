@@ -21,8 +21,8 @@ WARDEN = MonsterSpec(
     abilities=[
         Effect(
             kind="heal",
-            summary="Heals half of the damage taken from range",
-            amount=0,
+            summary="Heals up to 3 of the damage taken from range",
+            amount=3,
             duration=0,
             radius=0,
             max_targets=1,

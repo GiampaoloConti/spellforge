@@ -14,7 +14,9 @@ callers should use `asyncio.to_thread`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cache
 
+from spellforge.agents.budget import PowerMeasurement, spell_limits
 from spellforge.engine import (
     Cast,
     Event,
@@ -25,6 +27,7 @@ from spellforge.engine import (
     Plugin,
     PluginLoadError,
     Wait,
+    load_plugin,
 )
 from spellforge.engine.api import MonsterDef, SpellDef, Target
 from spellforge.engine.game import PLAYER_MAX_HP, PLAYER_MAX_MANA, GameStatus
@@ -48,6 +51,23 @@ MONSTER_ARENA = [
     "#...........#",
     "#############",
 ]
+PROBE_ARENA = [
+    "##########################",
+    "#........#...............#",
+    "#.@.d....#...........d...#",
+    "#........#...............#",
+    "#...d....#.......d.......#",
+    "#........................#",
+    "#......d.................#",
+    "##########################",
+]
+"""Training dummies near the caster, farther away, and far across the level behind a wall."""
+PROBE_ROUNDS = 3
+PROBE_START_HP = 2
+DUMMY_SOURCE = """
+define_monster(id="probe_dummy", name="training dummy", description="Stands still and takes it.",
+               glyph="d", max_hp=12, attack=0)
+"""
 ROUNDS_AFTER_CAST = 3
 MONSTER_ROUNDS = 6
 MAX_MONSTER_DAMAGE = 14
@@ -61,6 +81,9 @@ class Verification:
     warnings: list[str] = field(default_factory=list)
     spell_name: str = ""
     sprite_count: int = 0
+    balance_problems: list[str] = field(default_factory=list)
+    """Problems measured by the balance probe (also included in `problems`)."""
+    power: PowerMeasurement | None = None
     spell: SpellDef | None = None
     monster: MonsterDef | None = None
     player_id: int = 1
@@ -94,12 +117,108 @@ def verify_spell_source(
         try:
             for scenario, target in _scenarios(plugin):
                 _run_scenario(plugin, scenario, target, result)
+            if not result.problems:
+                result.power = probe_spell(plugin)
+                limits = spell_limits(spell.mana_cost, spell.cooldown, spell.range)
+                result.balance_problems = result.power.problems(
+                    limits, spell.mana_cost, spell.cooldown
+                )
+                result.problems += result.balance_problems
         except PluginLoadError as exc:  # e.g. an id clashing with a builtin
             result.problems.append(str(exc))
         result.ok = not result.problems
         return result
     finally:
         sandbox.close()
+
+
+@cache
+def _dummy_plugin() -> Plugin:
+    return load_plugin("probe_dummies", DUMMY_SOURCE)  # hand-written, trusted
+
+
+def probe_spell(plugin: Plugin) -> PowerMeasurement:
+    """Cast the spell once among training dummies and measure what it really does.
+
+    The caster starts at 2 HP (so healing shows its true size) with full mana. Dummies neither
+    move nor attack, so everything that happens is the spell's doing.
+    """
+    registry = default_registry()
+    registry.add(plugin)
+    registry.add(_dummy_plugin())
+    spell = plugin.spells[0]
+    game = Game.from_ascii(PROBE_ARENA, registry, {"d": "probe_dummy"}, spells=(spell.id,))
+    caster = game.player
+    caster.hp = PROBE_START_HP
+    start = {e.id: e.pos for e in game.entities.values()}
+    names = {e.id: e.name for e in game.entities.values()}
+
+    in_reach = sorted(
+        (
+            e
+            for e in game.entities.values()
+            if e is not caster
+            and e.pos.distance_to(caster.pos) <= spell.range
+            and (not spell.requires_line_of_sight or game.map.has_line_of_sight(caster.pos, e.pos))
+        ),
+        key=lambda e: (e.pos.distance_to(caster.pos), e.id),
+    )
+    if spell.target is Target.SELF:
+        target = None
+    elif in_reach:
+        target = in_reach[0].pos
+    elif spell.target is Target.ENTITY:
+        target = caster.pos
+    else:
+        target = next((p for p in caster.pos.neighbors() if game.is_walkable(p)), caster.pos)
+
+    measurement = PowerMeasurement()
+    try:
+        events = game.submit(Cast(spell.id, target))
+    except InvalidAction:
+        return measurement
+    for _ in range(PROBE_ROUNDS):
+        if game.status is not GameStatus.PLAYING:
+            break
+        events += game.submit(Wait())
+
+    player_side = {caster.id} | {
+        e.data["entity"]
+        for e in events
+        if e.type is EventType.SPAWNED and e.data["faction"] == caster.faction
+    }
+    far: dict[int, int] = {}
+    for event in events:
+        data = event.data
+        if event.type is EventType.SPAWNED and data["entity"] in player_side:
+            monster = registry.monsters.get(data["kind"])
+            measurement.ally_hp += monster.max_hp if monster else 0
+            names[data["entity"]] = data["kind"]
+        affected = None
+        if event.type is EventType.DAMAGED and data["target"] not in player_side:
+            if data["source"] in player_side:
+                measurement.damage += data["amount"]
+            affected = data["target"]
+        elif event.type is EventType.HEALED and data["target"] in player_side:
+            measurement.healing += data["amount"]
+        elif event.type is EventType.TURN_SKIPPED and data["entity"] not in player_side:
+            measurement.control += 1
+        elif event.type is EventType.STATUS_APPLIED and data["entity"] not in player_side:
+            affected = data["entity"]
+        elif (
+            event.type is EventType.MOVED
+            and data["how"] != "step"
+            and data["entity"] not in player_side
+        ):
+            affected = data["entity"]
+        if affected is not None and affected in start:
+            distance = start[affected].distance_to(start[caster.id])
+            if distance > spell.range + 4:
+                far[affected] = distance
+    if far:
+        measurement.farthest_reach = max(far.values())
+        measurement.far_targets = [f"{names[i]} at {d} tiles" for i, d in sorted(far.items())]
+    return measurement
 
 
 def _id_problems(plugin: Plugin, taken_ids: dict[str, list[str]]) -> list[str]:

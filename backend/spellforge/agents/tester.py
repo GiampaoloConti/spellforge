@@ -73,6 +73,17 @@ def spell_conformance(report: Verification, spec: SpellSpec) -> list[str]:
         )
 
     player = report.player_id
+    heal_limit = max((e.amount for e in spec.effects if e.kind == "heal"), default=0)
+    biggest_heal = max(
+        (e.data["amount"] for e in report.events if e.type is EventType.HEALED),
+        default=0,
+    )
+    if biggest_heal > heal_limit:
+        allowed = f"at most {heal_limit}" if heal_limit else "no healing"
+        problems.append(
+            f"in the test arena one heal restored {biggest_heal} HP, but the spec allows "
+            f"{allowed} per heal"
+        )
     damage_limit = max((e.amount for e in spec.effects if e.kind == "damage"), default=0)
     biggest_hit = max(
         (

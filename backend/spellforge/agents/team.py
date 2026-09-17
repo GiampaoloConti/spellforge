@@ -182,8 +182,11 @@ class TeamForge:
                 usage["artist"] += used
                 await progress("drawing", "The Artist finished the sprite.", done=True)
 
-            # 4. Test, feeding problems back to the Coder.
-            for attempt in range(1, self.max_code_attempts + 1):
+            # 4. Test. Code problems go back to the Coder; a spell measured over budget in the
+            #    balance probe goes back to the Balancer with the measurements.
+            code_attempts = 1
+            rebalanced = False
+            while True:
                 await progress("coding", f"The Coder wrote {draft.spell_id}.", done=True)
                 await progress("testing", "The Tester is running the spell in the sandbox…")
                 draft = self._with_art(draft, art_source)
@@ -192,21 +195,80 @@ class TeamForge:
                 )
                 outcome.verification = report
                 if report.ok:
-                    await progress("testing", "All tests passed.", done=True)
+                    await progress(
+                        "testing", "All tests passed, and it is within budget.", done=True
+                    )
                     outcome.ok = True
                     outcome.draft = draft
                     break
                 outcome.attempts.append(Attempt(draft, report.problems))
-                if attempt == self.max_code_attempts:
-                    outcome.error = "the spell kept failing its sandbox tests"
+                code_problems = [p for p in report.problems if p not in report.balance_problems]
+
+                if not code_problems and report.balance_problems and not rebalanced:
+                    rebalanced = True
+                    team["rebalance"] = report.balance_problems
+                    await progress(
+                        "balancing",
+                        "The balance probe measured it as too strong; back to the Balancer…",
+                        detail="; ".join(report.balance_problems),
+                    )
+                    review, used = await self.balancer.review_spell(
+                        approved,
+                        request.known_spells,
+                        notes("balancing"),
+                        measurements=report.balance_problems,
+                    )
+                    usage["balancer"] += used
+                    team["review"] = {
+                        "verdict": review.verdict,
+                        "rationale": review.rationale,
+                        "changes": (team["review"] or {}).get("changes", [])
+                        + [change.model_dump() for change in review.changes],
+                        "exploits_considered": review.exploits_considered,
+                    }
+                    await progress(
+                        "balancing",
+                        "The Balancer rejected it."
+                        if review.verdict == "reject"
+                        else "The Balancer rebalanced it.",
+                        done=True,
+                        verdict=review.verdict,
+                        detail=review.rationale,
+                        changes=team["review"]["changes"],
+                    )
+                    if review.verdict == "reject":
+                        outcome.error = f"the Balancer rejected it: {review.rationale}"
+                        break
+                    approved = self._with_sprite_if_needed(request, review.spec)
+                    await progress("coding", "The Coder implements the rebalanced spec…")
+                    draft = await self.coder.write(
+                        self._task(request, approved, art_id), [], notes("coding")
+                    )
+                    usage["coder"] += draft.usage
+                    continue
+
+                if code_attempts >= self.max_code_attempts or not code_problems:
+                    outcome.error = (
+                        "the spell stayed over budget after rebalancing"
+                        if not code_problems
+                        else "the spell kept failing its sandbox tests"
+                    )
                     break
+                code_attempts += 1
                 await progress(
                     "retrying",
-                    f"The Tester found a problem: {report.problems[0]}",
-                    detail="; ".join(report.problems[:3]),
+                    f"The Tester found a problem: {code_problems[0]}",
+                    detail="; ".join(code_problems[:3]),
                 )
                 draft = await self.coder.write(
-                    self._task(request, approved, art_id), outcome.attempts, notes("coding")
+                    self._task(request, approved, art_id),
+                    [
+                        Attempt(
+                            a.draft, [p for p in a.problems if not p.startswith("balance probe")]
+                        )
+                        for a in outcome.attempts
+                    ],
+                    notes("coding"),
                 )
                 usage["coder"] += draft.usage
         except AgentError as exc:

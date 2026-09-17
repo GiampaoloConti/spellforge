@@ -49,7 +49,7 @@ class FakeBalancer:
     def __init__(self, verdict="approve", spec=SPEC, delay=0.0):
         self.verdict, self.spec, self.delay = verdict, spec, delay
 
-    async def review_spell(self, spec, known_spells, on_progress=None):
+    async def review_spell(self, spec, known_spells, on_progress=None, measurements=None):
         await asyncio.sleep(self.delay)
         changes = []
         if self.verdict == "adjust":

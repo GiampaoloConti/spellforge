@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from spellforge.engine.game import PLAYER_MAX_MANA
 
@@ -37,6 +37,14 @@ class Effect(_Spec):
     max_targets: int = Field(
         ge=0, le=20, description="Most creatures affected per cast. 0 if unlimited or n/a."
     )
+
+    @model_validator(mode="after")
+    def _absolute_amounts(self) -> Effect:
+        if self.kind in ("damage", "heal") and self.amount < 1:
+            raise ValueError(
+                f"a {self.kind} effect needs an absolute amount (no 'full' or percentage effects)"
+            )
+        return self
 
 
 class SpellSpec(_Spec):
