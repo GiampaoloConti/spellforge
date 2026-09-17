@@ -23,7 +23,7 @@ they build on are described in [forge.md](forge.md) and [plugin-api.md](plugin-a
 | Balancer | Sonnet 5, low effort | the spec, an explicit power budget, the player's other spells. **Never the player's wording.** | `SpellReview`: approve / adjust / reject, rationale, a before→after list of changes with reasons |
 | Coder | Sonnet 5, low effort | the approved spec, the full plugin API reference, example plugins, and the idea (for flavour only) | the plugin source |
 | Artist | Opus 5, low effort | a sprite description and example sprites | 16x16 pixel art as data |
-| Tester | no LLM | the plugin and the approved spec | pass, or problems fed back to the Coder (at most 2 attempts) |
+| Tester | no LLM | the plugin and the approved spec | pass, or problems fed back to the Coder (at most 2 attempts), or measured over-budget power fed back to the Balancer (once) |
 
 Design choices:
 
@@ -44,6 +44,16 @@ Design choices:
   checks **conformance with the approved spec**: declared mana, cooldown, target and range; a
   sprite when one is needed; and, from the arena events, that no single hit and no status
   duration exceeds what the spec allows. A Coder that quietly rebalances gets caught.
+- **Balance is measured, then argued.** A playtester forged "4 damage to every enemy on the
+  level" and "heal me fully": each looked fine alone, and the pair made the game trivial. So the
+  Tester also casts every spell in a **balance probe** (`verify.probe_spell`): the caster
+  starts at 2 HP among training dummies near, farther away and across the level behind a wall.
+  It measures total damage, healing, enemy turns skipped, summoned HP and reach, and compares
+  them with limits derived from mana cost and cooldown (`budget.py`, the same numbers the
+  Balancer's prompt states). Over budget, the spec goes back to the Balancer **with the
+  measurements**, and it must adjust or reject; approving again is an error. Specs also require
+  absolute amounts ("heal to full" and percentages cannot be expressed), and the Balancer is
+  told to weigh combos with the player's existing spells.
 
 Switch to the single-agent baseline with `SPELLFORGE_FORGE_MODE=single`. Override models per
 role with `SPELLFORGE_<ROLE>_MODEL` / `SPELLFORGE_<ROLE>_EFFORT` (roles: `designer`, `balancer`,

@@ -22,6 +22,7 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
 - **Agents never block the game.** They work between turns, and the game stays playable.
 - **Generated code is sandboxed.** It goes through static AST checks, then runs in an isolated process with resource limits and access to the plugin API only.
 - **Nothing crashes the game.** Plugins that fail are disabled and replaced with safe fallbacks.
+- **Balance is measured, not just judged.** Every forged spell is cast among training dummies; damage, healing, crowd control, summons and reach are checked against limits set by its mana cost, and anything over budget goes back to the Balancer with the numbers.
 - **The dungeon fights back.** When you clear a level, a Dungeon Master agent reads how you play and designs a monster to counter it, which goes through the same balance, code and test pipeline.
 - **Measured, not claimed.** Benchmarks compare model choices and the single agent against the team on success rate, cost and latency ([docs/agents.md](docs/agents.md)).
 
@@ -47,9 +48,13 @@ cd ../backend
 python -m spellforge.server
 ```
 
-Press <kbd>F</kbd>, describe a spell, press <kbd>Enter</kbd>, and keep playing while the forge
-writes it (usually 10-20 seconds). The dungeon is endless: clear a level, take the stairs, and
-see how deep you get. Without an API key the game still works; the forge just stays offline.
+Find the arcane shard hidden on the first level (another waits every third level), then press
+<kbd>F</kbd>, describe a spell, press <kbd>Enter</kbd>, and keep playing while the agents write
+it (usually 15-25 seconds). The dungeon is endless: clear a level, take the stairs, and see how
+deep you get. Without an API key the game still works; the forge just stays offline.
+
+To host it for friends on Hugging Face Spaces, with your key kept as a secret, an invite code
+and a daily spending cap, see [docs/deploy.md](docs/deploy.md).
 
 For frontend development, run `python -m spellforge.server` and `npm run dev` side by side,
 then open http://localhost:5173. There is also a terminal version: `python -m spellforge`.
@@ -72,4 +77,5 @@ Python (engine, agents, sandbox, FastAPI websocket server) · TypeScript (canvas
 - [x] M2: Browser client
 - [x] M3: Single agent writes plugins at runtime
 - [x] M4: Agent team (designer, balancer, coder, artist, tester) plus a Dungeon Master that counters your play style
-- [ ] M5: Evals (single agent vs. team) and demo
+- [x] M5: Playable by friends: Hugging Face deployment with an invite code and spending cap, measured balance, arcane shards gate the forge, UI redesign
+- [ ] M6: Evals (single agent vs. team) and demo

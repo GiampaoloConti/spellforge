@@ -51,6 +51,24 @@
       </dl>
     </div>
 
+    <div id="gate" class="gate" hidden>
+      <form class="gate-card">
+        <canvas class="gate-sigil" width="16" height="16" aria-hidden="true"></canvas>
+        <h2>The forge is invite-only</h2>
+        <p class="muted">Enter the invite code you were given.</p>
+        <input
+          id="gate-code"
+          type="password"
+          autocomplete="off"
+          maxlength="200"
+          placeholder="Invite code"
+          aria-label="Invite code"
+        />
+        <button type="submit">Enter the dungeon</button>
+        <p class="gate-error" aria-live="polite"></p>
+      </form>
+    </div>
+
     <main class="layout">
       <section class="play">
         <div id="board-wrap" class="board-wrap">

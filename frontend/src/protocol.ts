@@ -177,6 +177,8 @@ export type ServerMessage =
       sprites: Record<string, SpriteArt>; // only sprites not sent before
     }
   | { type: "error"; message: string }
+  // Sent instead of "welcome" when the server needs an invite code; answer with "unlock".
+  | { type: "locked"; error: string | null }
   | {
       type: "welcome";
       forge_available: boolean;
@@ -215,6 +217,7 @@ export type ActionPayload =
   | { kind: "cast"; spell: string; target: Point | null };
 
 export type ClientMessage =
+  | { type: "unlock"; code: string }
   | { type: "new_game"; seed: number | null }
   | { type: "action"; action: ActionPayload }
   | { type: "invent"; idea: string } // 3-300 characters

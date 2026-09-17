@@ -7,6 +7,7 @@ import { GameConnection, serverUrl, type ConnectionStatus } from "./connection";
 import { Effects } from "./effects";
 import { DungeonMasterPanel } from "./dungeonMaster";
 import { ForgePanel } from "./forge";
+import { InviteGate } from "./gate";
 import { player, targetProblem, validTargets } from "./grid";
 import { keyToCommand, type Command } from "./input";
 import type { ActionPayload, DevCommand, GameState, Point, ServerMessage } from "./protocol";
@@ -50,11 +51,17 @@ let hadConnection = false;
 let hoverText = "";
 const newSpellIds = new Set<string>(); // forged spells not cast yet, shown with a badge
 
+const gate = new InviteGate($<HTMLElement>("#gate"), (code) => {
+  connection.send({ type: "unlock", code });
+});
+
+// The server greets every connection with "welcome" (or "locked" first, if it needs an
+// invite code); the run starts on "welcome".
 const connection = new GameConnection(serverUrl(), {
   onOpen: () => {
     if (hadConnection) log.add(["Reconnected. Starting a new run."], "system");
     hadConnection = true;
-    newGame();
+    gate.reset();
   },
   onMessage: handleMessage,
   onStatus: showConnection,
@@ -80,9 +87,15 @@ function sendAction(action: ActionPayload): void {
 
 function handleMessage(message: ServerMessage): void {
   // Narrowing: inside each branch, TypeScript knows exactly which variant `message` is.
+  if (message.type === "locked") {
+    gate.locked(message.error);
+    return;
+  }
   if (message.type === "welcome") {
+    gate.unlocked();
     forge.setAvailable(message.forge_available, message.forge_status);
     dungeonMaster.setAvailable(message.dungeon_master);
+    newGame();
     return;
   }
   if (message.type === "forge") {
@@ -394,8 +407,9 @@ function updateCaption(): void {
 
 /** Draw the pixel-art sigil into the header and use it as the favicon. */
 function drawBrand(): void {
-  const sigil = $<HTMLCanvasElement>("#sigil");
-  sigil.getContext("2d")!.drawImage(sigilSprite(), 0, 0);
+  for (const sigil of document.querySelectorAll<HTMLCanvasElement>(".sigil, .gate-sigil")) {
+    sigil.getContext("2d")!.drawImage(sigilSprite(), 0, 0);
+  }
   const icon = document.createElement("canvas");
   icon.width = icon.height = 64;
   const ctx = icon.getContext("2d")!;

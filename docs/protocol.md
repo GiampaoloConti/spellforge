@@ -11,13 +11,14 @@ types). Keep them in sync.
 ## Client → server
 
 ```jsonc
+{ "type": "unlock", "code": "invite-code" }  // only when the server sent "locked"
 { "type": "new_game", "seed": 42 }          // seed optional (null = random)
 { "type": "action", "action": { "kind": "move", "dx": 1, "dy": -1 } }   // dx, dy in -1..1
 { "type": "action", "action": { "kind": "wait" } }
 { "type": "action", "action": { "kind": "cast", "spell": "firebolt", "target": [12, 5] } }
 { "type": "action", "action": { "kind": "cast", "spell": "frost_nova", "target": null } }
 { "type": "invent", "idea": "chain lightning that jumps between 3 enemies" }   // 3-300 chars
-{ "type": "dev", "command": "clear_level" | "descend" }   // only with SPELLFORGE_DEV_TOOLS=1
+{ "type": "dev", "command": "clear_level" | "descend" | "give_shard" }   // SPELLFORGE_DEV_TOOLS=1
 ```
 
 Messages are validated strictly: unknown fields, out-of-range values and messages over
@@ -28,12 +29,20 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 `new_game` and `action` get exactly one reply (`state` or `error`). The server also pushes
 `welcome` on connect, and `forge` and `dungeon_master` updates at any time.
 
+When `SPELLFORGE_ACCESS_CODE` is set, a connection first gets
+`{ "type": "locked", "error": null }` and must answer with `unlock`. A wrong code gets
+`locked` again with an `error`; after 5 wrong codes the socket is closed. The right code gets
+`welcome`, and the client starts a game. A full server (`SPELLFORGE_MAX_SESSIONS`) sends an
+`error` and closes the socket.
+
 ```jsonc
 // Something happened (new game or a completed round)
 {
   "type": "state",
   "state": { /* Game.snapshot(): seed, player_id, depth, turn, status, map (with ">" stairs
-               once a level is cleared), entities (incl. appearance, can_act), spells */ },
+               once a level is cleared), entities (incl. appearance, can_act), spells,
+               items: [{ "kind": "arcane_shard", "pos": [x, y] }] on the floor,
+               inventory: { "arcane_shard": 1 } carried by the player */ },
   "events": [ { "type": "damaged", "turn": 3, "target": 4, "pos": [5, 2], "amount": 5, ... } ],
   "log": ["You cast Firebolt.", "The goblin takes 5 damage (1 HP left)."],
   // Pixel art for plugin sprites the client hasn't received yet in this run.
@@ -45,8 +54,9 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 ```
 
 - `state` is the full snapshot, not a diff. The map is about 1 KB, so simplicity wins.
-- The dungeon is endless: `level_cleared` and `level_started` events mark progress, and the
-  run ends with `status: "lost"` when the player dies.
+- The dungeon is endless: `level_cleared` and `level_started` (with `shard: true` on levels
+  that hide an arcane shard: depths 1, 4, 7, ...) events mark progress, and the run ends with
+  `status: "lost"` when the player dies. Stepping on a shard emits `item_picked_up`.
 - An entity's `appearance` is the sprite id to draw (for example `"rock"` while petrified).
   `null` means the client's default art for its kind.
 - `events` are structured engine events (see `engine/events.py`). The client uses them
@@ -62,8 +72,10 @@ Messages are validated strictly: unknown fields, out-of-range values and message
 { "type": "welcome", "forge_available": true, "forge_status": "ready",
   "forge_mode": "team" | "single", "dungeon_master": true }
 
-// After "invent", pushed while the game keeps running:
-{ "type": "forge", "status": "started", "message": "...", "idea": "...", "mode": "team" }
+// After "invent" (which needs a carried arcane shard), pushed while the game keeps running.
+// "started" spends the shard; `state` shows the new count.
+{ "type": "forge", "status": "started", "message": "...", "idea": "...", "mode": "team",
+  "state": { /* snapshot */ } }
 { "type": "forge", "status": "working", "message": "The Balancer adjusted the numbers.",
   "stage": "designing" | "balancing" | "coding" | "drawing" | "writing" | "testing"
          | "retrying" | "loading",
@@ -80,8 +92,10 @@ Messages are validated strictly: unknown fields, out-of-range values and message
   "agents": { "coder": { "model": "...", "seconds": 9.6, "tokens": 9000, "cost_usd": 0.02 } } },
   "state": { /* snapshot */ }, "sprites": { /* art the spell introduced */ } }
 
-// Failure (also used when the forge is busy, offline, or the run has ended).
-{ "type": "forge", "status": "failed", "message": "...", "problems": ["line 3: ..."] }
+// Failure (also used when the forge is busy, offline, locked without a shard, over the daily
+// budget, or the run has ended). A failed forge run gives the shard back and includes `state`.
+{ "type": "forge", "status": "failed", "message": "...", "problems": ["line 3: ..."],
+  "state": { /* snapshot, when the shard was returned */ } }
 ```
 
 A forge `done` or `failed` message is not a reply to `action`, so clients must not treat it
