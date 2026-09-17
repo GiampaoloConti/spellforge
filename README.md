@@ -24,17 +24,30 @@ You type it. A multi-agent pipeline designs it, balances it, writes it as code, 
 
 ## Try it
 
-The engine (milestone 1) is playable in the terminal:
+Requires Python 3.11+ and Node 20.19+ (or 22.12+).
 
 ```bash
+# 1. Backend
 cd backend
 python -m venv .venv && .venv/Scripts/activate   # Windows (Git Bash); use bin/activate elsewhere
 pip install -e ".[dev]"
-python -m spellforge --seed 42
-pytest
+
+# 2. Frontend (one-off build, served by the Python server)
+cd ../frontend
+npm install && npm run build
+
+# 3. Play at http://127.0.0.1:8000
+cd ../backend
+python -m spellforge.server
 ```
 
-The plugin API that agents will write against is documented in [docs/plugin-api.md](docs/plugin-api.md).
+For frontend development, run `python -m spellforge.server` and `npm run dev` side by side,
+then open http://localhost:5173. There is also a terminal version: `python -m spellforge`.
+
+Tests: `pytest` in `backend/`, `npm test` in `frontend/`.
+
+Design notes: [plugin API](docs/plugin-api.md) (what agents write against) and
+[client/server protocol](docs/protocol.md).
 
 ## Stack
 
@@ -43,7 +56,7 @@ Python (engine, agents, sandbox, FastAPI websocket server) · TypeScript (canvas
 ## Roadmap
 
 - [x] M1: Deterministic grid engine plus plugin API
-- [ ] M2: Browser client
+- [x] M2: Browser client
 - [ ] M3: Single agent writes plugins at runtime
 - [ ] M4: Agent team (designer, balancer, coder, tester) plus a Dungeon Master that counters your play style
 - [ ] M5: Evals (single agent vs. team) and demo

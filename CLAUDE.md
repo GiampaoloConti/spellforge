@@ -72,7 +72,7 @@ docs/            # design notes, eval results
 ## Milestones
 
 - [x] **M1: Engine (no AI).** Playable grid roguelike in the terminal/headless tests: player, walls, a hand-written enemy, turn loop, a plugin API with one hand-written spell plugin, deterministic tests. *Design the plugin API carefully, since everything else depends on it.*
-- [ ] **M2: Web client.** FastAPI websocket server plus a minimal TS canvas renderer. Playable in the browser.
+- [x] **M2: Web client.** FastAPI websocket server plus a minimal TS canvas renderer. Playable in the browser.
 - [ ] **M3: One agent.** Invent box → a single LLM call writes a plugin → sandbox validation → hot-load → castable.
 - [ ] **M4: Agent team.** Designer → Balancer → Coder → Tester with the retry loop and sandbox simulation. A Dungeon Master generates counter-enemies.
 - [ ] **M5: Evals and launch.** Benchmark prompts; compare single agent vs. team on success rate, balance and cost/latency; README GIF; write-up.
@@ -81,6 +81,7 @@ docs/            # design notes, eval results
 
 - 2026-09-17: repo scaffolded (README, CLAUDE.md, pyproject, package skeleton).
 - 2026-09-17: **M1 done.** Engine in `backend/spellforge/engine/`: `api.py` (plugin contract: `Ctx`, views, hooks), `plugins.py` (loader + `Registry`), `game.py` (turn loop, combat, statuses, hook dispatch with disable-on-failure, action budget, hook depth limit), `context.py` (validating `Ctx` impl). Builtin plugins (`goblin`, `firebolt`, `frost_nova`) are plugin *source* loaded like generated code. Terminal client: `python -m spellforge`. 79 tests. Design notes: `docs/plugin-api.md`. **Next: M2**: FastAPI websocket server (send `Game.snapshot()` + events, receive actions) and a minimal TS canvas renderer.
+- 2026-09-17: **M2 done.** `backend/spellforge/server/`: `protocol.py` (pydantic client messages, state/error replies), `session.py` (`GameSession`, network-free), `app.py` (one session per `/ws` connection; serves `frontend/dist` if built). `narration.py` (events → log text) shared by CLI and server. Frontend: Vite + TS, no framework: `protocol.ts` (mirrors server), `grid.ts` (range/LOS hints, same Bresenham as engine), `input.ts`, `renderer.ts` (canvas), `effects.ts`, `ui.ts`, `main.ts`. Verified end to end in headless Edge via DevTools (keys, targeting, casting, overlay). Protocol doc: `docs/protocol.md`. **Next: M3**: invent box in the UI → single LLM call writes a plugin → sandbox (AST validator + subprocess with limits, `ctx` as RPC proxy) → hot-load → castable. Needs server-pushed messages (`forge_progress`) while the game stays playable.
 
 Keep this section up to date: when finishing a chunk of work, tick milestones and add a dated line saying what was done and what comes next.
 
@@ -96,9 +97,17 @@ Keep this section up to date: when finishing a chunk of work, tick milestones an
 ## Commands
 
 ```bash
-# from backend/  (python -m spellforge to play in the terminal)
+# from backend/
 python -m venv .venv && .venv/Scripts/activate   # Windows (Git Bash)
 pip install -e ".[dev]"
 pytest
 ruff check . && ruff format .
+python -m spellforge            # terminal client
+python -m spellforge.server     # http://127.0.0.1:8000 (serves frontend/dist if built)
+
+# from frontend/
+npm install
+npm run dev                     # http://localhost:5173, proxies /ws and /api to :8000
+npm test                        # vitest
+npm run build                   # tsc typecheck + vite build into frontend/dist
 ```
