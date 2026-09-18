@@ -62,6 +62,10 @@ The game is the demo surface. The interesting part is the orchestration, and you
 
 A second pipeline, the **Dungeon Master**, runs on the same rails: every two cleared levels it reads a deterministic profile of how you actually fight (spells cast, melee ratio, area hits, what hurt you) and designs a monster to punish your dominant habit — which then goes through the same Balancer → Coder → Artist → Tester path and joins the encounter table from the next depth.
 
+![The Dungeon Master's counter-monster](docs/assets/dungeon-master.png)
+
+*I had been clearing levels with Firebolt and little else. The Dungeon Master read that profile and built the Ashward Cultist — "punishes pure Firebolt spam by reflecting/healing back a portion of ranged damage" — with a mandatory stated weakness (no ward against melee), a Balancer approval against the depth budget, a sprite and a taunt. 30.7s, $0.083, built while I took the stairs down.*
+
 ## Five orchestration decisions
 
 **1. Isolated context is a security boundary, not a token-saving trick.**
